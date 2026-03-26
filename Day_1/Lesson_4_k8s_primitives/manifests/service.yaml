@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  selector:
+    app: nginx # This MUST match the labels in the Deployment
+  ports:
+    - protocol: TCP
+      port: 80 # Port on the Service
+      targetPort: 80 # Port on the Pod
+  type: ClusterIP # Internal-only IP

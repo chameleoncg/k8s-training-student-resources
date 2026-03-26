@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: config-test
+  template:
+    metadata:
+      labels:
+        app: config-test
+    spec:
+      containers:
+        - name: env-checker
+          image: busybox
+          command: ["sh", "-c", "while true; do env; sleep 10; done"]
+          env:
+            # Injecting from ConfigMap
+            - name: MY_COLOR
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: APP_COLOR
+            # Injecting from Secret
+            - name: MY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: API_KEY
