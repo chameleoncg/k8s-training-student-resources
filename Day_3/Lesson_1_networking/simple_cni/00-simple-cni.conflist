@@ -1,0 +1,24 @@
+{
+  "cniVersion": "1.0.0",
+  "name": "simple",
+  "plugins": [
+    {
+      "type": "simple-cni",
+      "bridge": "cni0",
+      "ipam": {
+        "type": "host-local",
+        "ranges": [
+          [
+            { 
+              "subnet": "10.244.0.0/24",
+              "gateway": "10.244.0.1"
+            }
+          ]
+        ],
+        "routes": [
+          { "dst": "0.0.0.0/0" }
+        ]
+      }
+    }
+  ]
+}

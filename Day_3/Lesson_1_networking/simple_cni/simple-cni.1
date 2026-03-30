@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# stash off stdin
+STDIN_CAPTURE=$(cat)
+COMMAND="${CNI_COMMAND:-}"
+NETNS="${CNI_NETNS:-}"
+IFNAME="${CNI_IFNAME:-eth0}"
+CONTAINERID="${CNI_CONTAINERID:-}"
+BRIDGE="cni0"
+
+POD_CIDR=$(echo "$STDIN_CAPTURE" | jq -r '.ipam.ranges[0][0].subnet')
+GW_IP=$(echo "$STDIN_CAPTURE" | jq -r '.ipam.ranges[0][0].gateway // empty')
+
+cat >> /tmp/cni_log << EOF
+====================
+$STDIN_CAPTURE
+Command is "$COMMAND"
+Container details: "${CONTAINERID}[ns=${NETNS}]
+CNI_IFNAME: "${CNI_IFNAME}"
+CIDR: "${POD_CIDR}"
+Gateway: "${GW_IP}"
+EOF
+
+if [[ "$COMMAND" == "ADD" ]]; then
+  echo "Adding!"
+elif [[ "$COMMAND" == "DEL" ]]; then
+  echo "Deleting!"
+fi

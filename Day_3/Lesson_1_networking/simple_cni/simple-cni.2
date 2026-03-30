@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# stash off stdin
+STDIN_CAPTURE=$(cat)
+COMMAND="${CNI_COMMAND:-}"
+NETNS="${CNI_NETNS:-}"
+IFNAME="${CNI_IFNAME:-eth0}"
+CONTAINERID="${CNI_CONTAINERID:-}"
+BRIDGE="cni0"
+POD_CIDR=$(echo "$STDIN_CAPTURE" | jq -r '.ipam.ranges[0][0].subnet // empty')
+GW_IP=$(echo "$STDIN_CAPTURE" | jq -r '.ipam.ranges[0][0].gateway // empty')
+
+# Keep plugin stdout clean for CNI JSON only.
+exec 3>&1
+exec 1>>/tmp/cni_log
+
+cat >> /tmp/cni_log << EOF
+====================
+$STDIN_CAPTURE
+Command is "$COMMAND"
+Container details: "${CONTAINERID}[ns=${NETNS}]
+CNI_IFNAME: "${CNI_IFNAME}"
+CIDR: "${POD_CIDR}"
+Gateway: "${GW_IP}"
+EOF
+
+
+if [[ "$COMMAND" == "ADD" ]]; then
+  # match the veth to the container id, 
+  # but make it fit in the limits of veth names
+  HOST_VETH="lxc${CONTAINERID:0:5}"
+
+  # Create a new veth pair
+  ip link add "$HOST_VETH" type veth peer name "$IFNAME" netns "$NETNS"  >> /tmp/cni_log 2>&1
+
+  # Attach one side of the veth to the bridge (the other side is in the netns)
+  ip link set "$HOST_VETH" master "$BRIDGE"
+
+  # Enabled the interface on each side
+  ip link set "$HOST_VETH" up
+  nsenter --net="$NETNS" ip link set "$IFNAME" up
+  nsenter --net="$NETNS" ip link set lo up
+
+  # IPAM calculation to get IPs set
+  # Use host-local ipam to get the IP and gateway
+  IPAM_RESULT=$(echo "$STDIN_CAPTURE" | /opt/cni/bin/host-local)
+  ADDR=$(echo "$IPAM_RESULT" | jq -r '.ips[0].address')
+  GW=$(echo "$IPAM_RESULT" | jq -r '.ips[0].gateway')
+
+  # (Optional: for lab) Make the MAC address of the interface consistent & match the IPs
+  LAST_OCTET=$(echo "$ADDR" | awk -F. '{print $4}')
+  ip link set dev "$HOST_VETH" address "02:67:67:00:00:${LAST_OCTET}"
+
+  # Set the calculated IPs on the interface in the container
+  nsenter --net="$NETNS" ip addr add dev "$IFNAME" "$ADDR"
+  nsenter --net="$NETNS" ip route add default via "$GW"
+
+  # This returns JSON in the CNI spec format to stdout
+  echo "$IPAM_RESULT" | jq --arg ifname "$IFNAME" --arg netns "$CNI_NETNS" '
+    .interfaces=[{name:$ifname,sandbox:$netns}] |
+    .ips |= map(. + {version:"4", interface:0}) 
+  ' >&3
+
+elif [[ "$COMMAND" == "DEL" ]]; then
+  ip link del "lxc${CONTAINERID:0:5}" 2>/dev/null ||:
+  echo "$STDIN_CAPTURE" | /opt/cni/bin/host-local ||:
+fi
