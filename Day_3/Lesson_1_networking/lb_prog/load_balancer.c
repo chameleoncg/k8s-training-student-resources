@@ -1,11 +1,16 @@
 #include "load_balancer.h"
 
-#define SVC_VIP_IP __constant_htonl(0x0af4fffb)      /* 10.41.255.251 */
+#define SVC_VIP_RAW_IP 0x0a29fffb /* 10.41.255.251 */
+#define SVC_VIP_IP __constant_htonl(SVC_VIP_RAW_IP)
 #define SVC_VIP_PORT __constant_htons(8080)
-#define POD_CIDR_IP __constant_htonl(0x0af40000)     /* 10.41.0.0 */
-#define POD_CIDR_MASK __constant_htonl(0xffff0000)   /* /16 */
+#define POD_CIDR_RAW_IP 0x0a290000 /* 10.41.0.0 */
+#define POD_CIDR_RAW_MASK 0xffff0000 /* /16 */
+#define POD_CIDR_IP __constant_htonl(POD_CIDR_RAW_IP)
+#define POD_CIDR_MASK __constant_htonl(POD_CIDR_RAW_MASK)
+
+// should be passed as a build argument, but hardcoding as a fallback
 #ifndef REAL_BACKEND_RAW_IP
-#define REAL_BACKEND_RAW_IP 0x0af40003 /* 10.41.0.3 */
+#define REAL_BACKEND_RAW_IP 0x0a290003 /* 10.41.0.3 */
 #endif
 #define REAL_BACKEND_IP __constant_htonl(REAL_BACKEND_RAW_IP)
 #define REAL_BACKEND_PORT __constant_htons(8080)
