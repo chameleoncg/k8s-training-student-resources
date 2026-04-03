@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy
+  namespace: oidc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oauth2-proxy
+  template:
+    metadata:
+      labels:
+        app: oauth2-proxy
+    spec:
+      containers:
+        - name: oauth2-proxy
+          image: quay.io/oauth2-proxy/oauth2-proxy:v7.13.0
+          args:
+            - --provider=oidc
+            - --http-address=0.0.0.0:4180
+            - --reverse-proxy=true
+            - --upstream=http://oidc-echo.oidc.svc.cluster.local:5678/
+            - --redirect-url=${REDIRECT_URI}
+            - --oidc-issuer-url=${KEYCLOAK_URL}/realms/training
+            - --skip-oidc-discovery=true
+            - --login-url=${KEYCLOAK_URL}/realms/training/protocol/openid-connect/auth
+            - --redeem-url=http://keycloak.oidc.svc.cluster.local:${PORT}/realms/training/protocol/openid-connect/token
+            - --oidc-jwks-url=http://keycloak.oidc.svc.cluster.local:${PORT}/realms/training/protocol/openid-connect/certs
+            - --scope=openid profile email
+            - --email-domain=*
+            - --cookie-secure=false
+            - --cookie-samesite=lax
+            - --skip-provider-button=true
+            - --set-authorization-header=true
+            - --pass-access-token=true
+          env:
+            - name: OAUTH2_PROXY_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: oauth2-proxy-secrets
+                  key: client-id
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: oauth2-proxy-secrets
+                  key: client-secret
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: oauth2-proxy-secrets
+                  key: cookie-secret
+          ports:
+            - containerPort: 4180
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-proxy
+  namespace: oidc
+spec:
+  selector:
+    app: oauth2-proxy
+  ports:
+    - name: http
+      port: 4180
+      targetPort: http
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: app-route
+  namespace: oidc
+spec:
+  parentRefs:
+    - name: oidc-gateway
+  hostnames:
+    - ${APP_HOST}
+  rules:
+    - backendRefs:
+        - name: oauth2-proxy
+          port: 4180
