@@ -1,7 +1,17 @@
 #!/bin/bash
 
-# Exit on any error
+#!/bin/bash
 set -e
+
+echo "--- 0. Optimizing Host Resource Limits ---"
+# This prevents the 'Too many open files' error in KiND/Longhorn
+sudo sysctl -w fs.inotify.max_user_watches=524288
+sudo sysctl -w fs.inotify.max_user_instances=512
+
+# Make it permanent (using grep to avoid duplicate entries)
+grep -q "fs.inotify.max_user_watches" /etc/sysctl.conf || echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
+grep -q "fs.inotify.max_user_instances" /etc/sysctl.conf || echo "fs.inotify.max_user_instances=512" | sudo tee -a /etc/sysctl.conf
+echo "Host limits optimized."
 
 echo "--- 1. Creating KiND Multi-Node Configuration ---"
 cat <<EOF > kind-config.yaml
@@ -12,7 +22,7 @@ nodes:
 - role: worker
 - role: worker
 EOF
-[ -f kind-config.yaml ] && echo "✅ Config file created."
+[ -f kind-config.yaml ] && echo " Config file created."
 
 echo "--- 2. Building 3-Node Kubernetes Cluster ---"
 kind delete cluster --name longhorn-lab || true
@@ -22,14 +32,14 @@ kind create cluster --name longhorn-lab --config kind-config.yaml
 echo "Verifying nodes..."
 kubectl wait --for=condition=Ready nodes --all --timeout=60s
 kubectl get nodes
-echo "✅ Cluster nodes are Ready."
+echo " Cluster nodes are Ready."
 
 echo "--- 3. Installing Host Dependencies ---"
 sudo apt update && sudo apt install -y open-iscsi nfs-common
 sudo systemctl enable --now iscsid
 
 # VERIFICATION: Check if iscsid is actually running
-systemctl is-active --quiet iscsid && echo "✅ iscsid service is active."
+systemctl is-active --quiet iscsid && echo " iscsid service is active."
 
 echo "--- 4. Deploying Longhorn CSI (v1.6.0) ---"
 kubectl apply -f https://raw.githubusercontent.com/longhorn/longhorn/v1.6.0/deploy/longhorn.yaml
@@ -45,7 +55,7 @@ kubectl wait --namespace longhorn-system \
 
 # VERIFICATION: List all pods in the namespace
 kubectl get pods -n longhorn-system
-echo "✅ Longhorn control plane is Running."
+echo " Longhorn control plane is Running."
 
 echo "--- 6. Configuring Default StorageClass ---"
 # We need to wait for the storageclass to actually appear in the API
@@ -53,7 +63,7 @@ MAX_RETRIES=10
 COUNT=0
 while ! kubectl get storageclass longhorn >/dev/null 2>&1; do
     if [ $COUNT -ge $MAX_RETRIES ]; then
-        echo "❌ Error: Longhorn StorageClass never appeared."
+        echo "********** Error: Longhorn StorageClass never appeared."
         exit 1
     fi
     echo "Waiting for Longhorn StorageClass to be created..."
@@ -67,9 +77,9 @@ kubectl patch storageclass longhorn -p '{"metadata": {"annotations":{"storagecla
 
 # VERIFICATION: Check default status
 kubectl get sc
-echo "✅ Longhorn is now the default StorageClass."
+echo " Longhorn is now the default StorageClass."
 
 echo "--------------------------------------------------------"
-echo "🚀 ALL VERIFICATIONS PASSED"
+echo "VERIFICATIONS PASSED"
 echo "Longhorn is ready for Lesson 5 labs."
 echo "--------------------------------------------------------"
