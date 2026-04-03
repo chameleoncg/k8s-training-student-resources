@@ -1,0 +1,9 @@
+---
+apiVersion: clarity.io/v1betas
+kind: MissionDeployment 
+metadata:
+    name: my-deployment
+    namespace: default
+spec:
+    ip: 167.93.121.66
+    action: scan
