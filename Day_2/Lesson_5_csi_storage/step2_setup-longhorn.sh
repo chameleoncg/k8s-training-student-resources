@@ -66,7 +66,8 @@ kind delete cluster --name longhorn-lab || true
 docker network prune -f || true
 
 # Create a cluster using the above config.
-kind create cluster --name longhorn-lab --config kind-config.yaml --wait 5m
+kind create cluster --name longhorn-lab --config kind-config.yaml --wait 15m
+
 
 # Wait for Kubernetes nodes to be Ready.
 echo "--- Verification: Check if nodes are online ---"
