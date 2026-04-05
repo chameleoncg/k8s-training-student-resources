@@ -40,27 +40,57 @@ sudo apt update
 sudo apt install -y open-iscsi nfs-common
 sudo systemctl enable --now iscsid || true
 
-echo "--- 3b. Install open-iscsi inside kind node containers (CRITICAL for Longhorn iSCSI frontend) ---"
-# List kind node containers for cluster "longhorn-lab"
+
+echo "--- 3b. Install + start iSCSI initiator in kind node containers (FIX for Longhorn) ---"
+
 KIND_NODE_CONTAINERS="$(docker ps --filter label=io.x-k8s.kind.cluster=longhorn-lab --format '{{.Names}}')"
-
 if [ -z "$KIND_NODE_CONTAINERS" ]; then
-  echo "WARNING: Could not detect kind node containers via labels."
-  echo "Run: docker ps | grep kindest/node (manual verification needed)."
-else
-  for c in $KIND_NODE_CONTAINERS; do
-    echo "==> Configuring open-iscsi in kind node container: $c"
-
-    # Install open-iscsi tools (kind node images are usually Debian/Ubuntu based)
-    docker exec "$c" sh -c "apt-get update && apt-get install -y open-iscsi" || true
-
-    # Ensure initiatorname exists (Longhorn engine expects initiatorname for iscsid/iscsiadm flows)
-    docker exec "$c" sh -c 'if [ ! -s /etc/iscsi/initiatorname.iscsi ]; then echo "InitiatorName=iqn.2026-04.com.longhorn:$(hostname)" > /etc/iscsi/initiatorname.iscsi; fi' || true
-
-    # Start iscsid (best-effort: container may not have systemd)
-    docker exec "$c" sh -c 'pkill iscsid 2>/dev/null || true; (iscsid || true) && (pgrep -a iscsid || true)' || true
-  done
+  echo "ERROR: Could not detect kind node containers for cluster longhorn-lab."
+  exit 1
 fi
+
+for c in $KIND_NODE_CONTAINERS; do
+  echo "==> Configuring inside kind node container: $c"
+
+  docker exec "$c" sh -c '
+    set -e
+
+    apt-get update
+    # open-iscsi tools + dbus (prevents "Failed to connect to bus" issues)
+    apt-get install -y open-iscsi dbus >/dev/null 2>&1 || true
+
+    # initiatorname is often required for successful flows
+    mkdir -p /etc/iscsi
+    if [ ! -s /etc/iscsi/initiatorname.iscsi ]; then
+      echo "InitiatorName=iqn.2026-04.com.longhorn:$(hostname)" > /etc/iscsi/initiatorname.iscsi
+    fi
+
+    # start dbus (no systemd in kind containers)
+    pkill dbus-daemon >/dev/null 2>&1 || true
+    mkdir -p /run/dbus
+    dbus-daemon --system --fork || true
+    sleep 0.5
+
+    # start iscsid and ensure it creates socket dir
+    pkill iscsid >/dev/null 2>&1 || true
+    mkdir -p /run/iscsid /var/run/iscsid || true
+
+    # start iscsid (foreground to background)
+    (iscsid -f >/tmp/iscsid.log 2>&1 &) || true
+    sleep 1
+
+    echo "---- checks ----"
+    pgrep -a iscsid || true
+    echo "iscsid sockets:"
+    ls -la /run/iscsid /var/run/iscsid 2>/dev/null || true
+    echo "iscsid unix sockets (ss):"
+    ss -xl 2>/dev/null | grep -i iscsid || true
+
+    echo "iscsiadm sanity (should NOT say can not connect to iscsid):"
+    iscsiadm -m node -o show 2>&1 | tail -n 10 || true
+  ' || true
+done
+
 
 echo "--- Verification: iscsid running? ---"
 systemctl is-active --quiet iscsid && echo " iscsid service is active."
