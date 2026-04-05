@@ -35,9 +35,32 @@ kubectl wait --for=condition=Ready nodes --all --timeout=300s
 kubectl get nodes
 echo "Cluster nodes are Ready."
 
-echo "--- 3. Installing Host Dependencies ---"
-sudo apt update && sudo apt install -y open-iscsi nfs-common
-sudo systemctl enable --now iscsid
+echo "--- 3. Installing Host Dependencies (VM host) ---"
+sudo apt update
+sudo apt install -y open-iscsi nfs-common
+sudo systemctl enable --now iscsid || true
+
+echo "--- 3b. Install open-iscsi inside kind node containers (CRITICAL for Longhorn iSCSI frontend) ---"
+# List kind node containers for cluster "longhorn-lab"
+KIND_NODE_CONTAINERS="$(docker ps --filter label=io.x-k8s.kind.cluster=longhorn-lab --format '{{.Names}}')"
+
+if [ -z "$KIND_NODE_CONTAINERS" ]; then
+  echo "WARNING: Could not detect kind node containers via labels."
+  echo "Run: docker ps | grep kindest/node (manual verification needed)."
+else
+  for c in $KIND_NODE_CONTAINERS; do
+    echo "==> Configuring open-iscsi in kind node container: $c"
+
+    # Install open-iscsi tools (kind node images are usually Debian/Ubuntu based)
+    docker exec "$c" sh -c "apt-get update && apt-get install -y open-iscsi" || true
+
+    # Ensure initiatorname exists (Longhorn engine expects initiatorname for iscsid/iscsiadm flows)
+    docker exec "$c" sh -c 'if [ ! -s /etc/iscsi/initiatorname.iscsi ]; then echo "InitiatorName=iqn.2026-04.com.longhorn:$(hostname)" > /etc/iscsi/initiatorname.iscsi; fi' || true
+
+    # Start iscsid (best-effort: container may not have systemd)
+    docker exec "$c" sh -c 'pkill iscsid 2>/dev/null || true; (iscsid || true) && (pgrep -a iscsid || true)' || true
+  done
+fi
 
 echo "--- Verification: iscsid running? ---"
 systemctl is-active --quiet iscsid && echo " iscsid service is active."
