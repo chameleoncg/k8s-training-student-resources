@@ -1,12 +1,14 @@
 #!/bin/bash
-# Lesson setup script:
-# - Creates a 2-node kind Kubernetes cluster
-# - Ensures iSCSI initiator tooling exists on the VM host
-# - Ensures iSCSI initiator tooling exists INSIDE the kind node containers
-#   (Longhorn's engine uses nsenter into node namespaces, so host-only is not enough)
-# - Installs Longhorn v1.6.0
-# - Waits briefly for Longhorn components
-# - Sets Longhorn as the default StorageClass
+# Step 2: Create a kind cluster and install Longhorn
+#
+# What this script does (high-level):
+#  1) Tunes host kernel limits (inotify, ip_forward)
+#  2) Creates a 2-node kind cluster (1 control-plane, 1 worker)
+#  3) Installs iSCSI tooling on the host (open-iscsi, nfs-common)
+#  4) Installs iSCSI tooling INSIDE the kind node containers as well
+#     (Longhorn's engine relies on node namespace iSCSI behavior)
+#  5) Installs Longhorn v1.6.0 and waits a bit
+#  6) Sets Longhorn StorageClass as the default
 
 set -euo pipefail
 
@@ -15,19 +17,19 @@ set -euo pipefail
 # -------------------------
 echo "--- 0. Optimizing Host Resource Limits & Kernel ---"
 
-# These settings reduce common issues with inotify watchers and networking behavior.
+# These reduce common lab issues (watch limits and forwarding).
 sudo sysctl -w fs.inotify.max_user_watches=524288
 sudo sysctl -w fs.inotify.max_user_instances=512
 sudo sysctl -w net.ipv4.ip_forward=1
 
-# Persist the settings across reboots.
+# Persist settings across reboots.
 grep -q "fs.inotify.max_user_watches" /etc/sysctl.conf || echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
 grep -q "fs.inotify.max_user_instances" /etc/sysctl.conf || echo "fs.inotify.max_user_instances=512" | sudo tee -a /etc/sysctl.conf
 grep -q "net.ipv4.ip_forward" /etc/sysctl.conf || echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
 echo "Host limits and kernel forwarding optimized."
 
 # -------------------------
-# 0b) Restart container runtime services (best-effort)
+# 0b) Restart container runtime (best-effort)
 # -------------------------
 echo "--- 0b. Refreshing Container Runtime ---"
 sudo systemctl daemon-reload
@@ -37,6 +39,8 @@ sudo systemctl restart docker
 # 1) kind cluster config
 # -------------------------
 echo "--- 1. Creating KiND 2-Node Configuration (1 control-plane, 1 worker) ---"
+# Note: This file is consumed by kind when creating the cluster.
+# It is written dynamically so the script is portable.
 cat <<'EOF' > kind-config.yaml
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -44,27 +48,27 @@ nodes:
 - role: control-plane
 - role: worker
 
-# CRITICAL: disable systemd cgroups inside kind nodes.
+# IMPORTANT:
+# Disables systemd cgroups inside kind nodes to avoid certain OCI/cgroup failures.
 containerdConfigPatches:
 - |-
   [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
     SystemdCgroup = false
 EOF
 
-
 # -------------------------
 # 2) Create the kind cluster
 # -------------------------
 echo "--- 2. Building 2-Node Kubernetes Cluster ---"
 
-# Ensure we start clean.
+# Start from a clean slate each run.
 kind delete cluster --name longhorn-lab || true
 docker network prune -f || true
 
-# Create a 1 control-plane + 1 worker cluster.
+# Create a cluster using the above config.
 kind create cluster --name longhorn-lab --config kind-config.yaml --wait 5m
 
-# Wait until the Kubernetes nodes are ready.
+# Wait for Kubernetes nodes to be Ready.
 echo "--- Verification: Check if nodes are online ---"
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 kubectl get nodes
@@ -73,20 +77,19 @@ echo "Cluster nodes are Ready."
 # -------------------------
 # 3) Host dependencies
 # -------------------------
-# Longhorn uses iSCSI for blockdev frontend. We install open-iscsi on the VM host.
+# Longhorn's default blockdev frontend uses iSCSI, so we install open-iscsi on the VM host.
 echo "--- 3. Installing Host Dependencies (VM host) ---"
 sudo apt update
 sudo apt install -y open-iscsi nfs-common
 sudo systemctl enable --now iscsid || true
 
 # -------------------------
-# 3b) iSCSI initiator inside kind nodes (CRITICAL)
+# 3b) iSCSI initiator inside kind nodes
 # -------------------------
 echo "--- 3b. Install + start iSCSI initiator in kind node containers (FIX for Longhorn) ---"
 
-# kind runs Kubernetes nodes as Docker containers.
-# Longhorn's instance-manager uses nsenter to call iscsiadm/iscsid *in the node namespace*,
-# so iSCSI must be present and running inside those node containers too.
+# kind nodes are Docker containers; Longhorn/instance-manager uses nsenter,
+# so iSCSI tools must exist *inside the node containers* too.
 KIND_NODE_CONTAINERS="$(docker ps --filter label=io.x-k8s.kind.cluster=longhorn-lab --format '{{.Names}}')"
 if [ -z "$KIND_NODE_CONTAINERS" ]; then
   echo "ERROR: Could not detect kind node containers for cluster longhorn-lab."
@@ -99,31 +102,32 @@ for c in $KIND_NODE_CONTAINERS; do
   docker exec "$c" sh -c '
     set -e
 
-    # Install iSCSI tooling and dbus (dbus helps avoid "Failed to connect to bus" issues).
+    # Install required packages in the node container.
+    # dbus helps avoid "Failed to connect to bus" problems.
     apt-get update
     apt-get install -y open-iscsi dbus >/dev/null 2>&1 || true
 
     # Longhorn often expects initiatorname to exist.
-    # If missing, create a simple default.
     mkdir -p /etc/iscsi
     if [ ! -s /etc/iscsi/initiatorname.iscsi ]; then
       echo "InitiatorName=iqn.2026-04.com.longhorn:$(hostname)" > /etc/iscsi/initiatorname.iscsi
     fi
 
-    # Start dbus in container mode (no systemd in most kind node images).
+    # Start dbus (kind containers usually don’t run systemd).
     pkill dbus-daemon >/dev/null 2>&1 || true
     mkdir -p /run/dbus
     dbus-daemon --system --fork || true
     sleep 0.5
 
-    # Restart iscsid and ensure socket directories exist.
+    # Start/Restart iscsid and ensure socket directories exist.
     pkill iscsid >/dev/null 2>&1 || true
     mkdir -p /run/iscsid /var/run/iscsid || true
 
-    # Start iscsid in background.
+    # Start iscsid in background mode.
     (iscsid -f >/tmp/iscsid.log 2>&1 &) || true
     sleep 1
 
+    # Basic checks (best-effort).
     echo "---- checks ----"
     pgrep -a iscsid || true
 
@@ -138,9 +142,7 @@ for c in $KIND_NODE_CONTAINERS; do
   ' || true
 done
 
-# -------------------------
-# Host verification (best-effort)
-# -------------------------
+# Host-side confirmation (best-effort)
 echo "--- Verification: iscsid running? ---"
 systemctl is-active --quiet iscsid && echo " iscsid service is active."
 
@@ -155,7 +157,8 @@ kubectl apply -f https://raw.githubusercontent.com/longhorn/longhorn/v1.6.0/depl
 # -------------------------
 echo "--- 5. Waiting for Longhorn system components (defensive) ---"
 
-# This wait function is intentionally “defensive” because labs can be slow.
+# The wait logic is intentionally “defensive” for lab stability:
+# it snapshots pod status and attempts restarts if things appear stuck.
 wait_longhorn() {
   local ns="longhorn-system"
   local attempt=1
@@ -164,39 +167,40 @@ wait_longhorn() {
   while [ "$attempt" -le "$max_attempts" ]; do
     echo "Attempt $attempt/$max_attempts: checking Longhorn pods readiness..."
 
-    # Print a snapshot of pod status to help debugging.
     kubectl get pods -n "$ns" -o wide || true
 
-    # If manager-like pods exist, wait until at least one becomes Ready.
-    if kubectl get pods -n "$ns" --no-headers 2>/dev/null | awk '{print $1}' | grep -qi "longhorn.*manager"; then
+    # If manager-like pods exist, try waiting for them to become Ready.
+    if kubectl get pods -n "$ns" --no-headers 2>/dev/null \
+      | awk '{print $1}' | grep -qi "longhorn.*manager"; then
       kubectl wait -n "$ns" --for=condition=Ready pod --timeout=90s 2>/dev/null || true
     fi
 
-    # Prefer controller readiness for deployments that contain “manager” in the name.
+    # Prefer waiting on deployments whose names contain "manager".
     if kubectl -n "$ns" get deploy --no-headers 2>/dev/null | grep -qi manager; then
       kubectl -n "$ns" get deploy --no-headers -o name 2>/dev/null \
         | grep -i manager | head -n1 \
         | xargs -r -I{} kubectl -n "$ns" rollout status {} --timeout=90s || true
 
-      # If any pods are Running/Ready, we treat control plane as “good enough”.
-      if kubectl -n "$ns" get pods --no-headers 2>/dev/null | awk '{print $2}' | grep -qE 'Running|READY'; then
+      # If pods show Running/Ready states, treat control plane as “good enough”.
+      if kubectl -n "$ns" get pods --no-headers 2>/dev/null \
+        | awk '{print $2}' | grep -qE 'Running|READY'; then
         return 0
       fi
     fi
 
-    # Otherwise, dump diagnostics and restart best-effort components (attempt again).
+    # If not ready yet: dump diagnostics and restart best-effort components.
     echo "Longhorn not ready yet; dumping diagnostics and restarting best-effort controllers..."
     kubectl -n "$ns" get pods -o wide || true
     kubectl -n "$ns" get events --sort-by=.metadata.creationTimestamp | tail -n 30 || true
 
-    # Restart deployments that look like Longhorn components.
+    # Restart deployments that look Longhorn-related.
     kubectl -n "$ns" get deploy --no-headers -o name 2>/dev/null \
       | grep -Ei 'longhorn|manager|csi|ui' \
       | while read -r d; do
           kubectl -n "$ns" rollout restart "$d" || true
         done
 
-    # Restart CSI-related daemonsets.
+    # Restart CSI-related daemonsets too.
     kubectl -n "$ns" get ds --no-headers -o name 2>/dev/null \
       | grep -Ei 'csi|node|plugin' \
       | while read -r ds; do
@@ -225,7 +229,7 @@ echo "Longhorn control plane is Running (or at least controllers have reached re
 # -------------------------
 echo "--- 6. Configuring Default StorageClass ---"
 
-# Longhorn installs the storageclass asynchronously; retry until it appears.
+# Wait for the longhorn StorageClass to appear.
 MAX_RETRIES=15
 COUNT=0
 while ! kubectl get storageclass longhorn >/dev/null 2>&1; do
@@ -238,13 +242,12 @@ while ! kubectl get storageclass longhorn >/dev/null 2>&1; do
   COUNT=$((COUNT + 1))
 done
 
-# Set default annotations:
-# - Mark 'standard' as NOT default
-# - Mark 'longhorn' as default
-kubectl patch storageclass standard -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' || true
-kubectl patch storageclass longhorn  -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' || true
+# Set default StorageClass annotations.
+kubectl patch storageclass standard \
+  -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' || true
+kubectl patch storageclass longhorn \
+  -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' || true
 
-# Show storage classes for confirmation.
 kubectl get sc
 echo "--------------------------------------------------------"
 echo "LONGHORN READY"
