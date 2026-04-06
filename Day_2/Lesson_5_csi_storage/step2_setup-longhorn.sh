@@ -41,7 +41,7 @@ sudo systemctl restart docker
 echo "--- 1. Creating KiND 2-Node Configuration (1 control-plane, 1 worker) ---"
 # Note: This file is consumed by kind when creating the cluster.
 
-sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
 
 cat <<'EOF' > kind-config.yaml
@@ -51,14 +51,10 @@ nodes:
 - role: control-plane
 - role: worker
 
-# IMPORTANT:
-# Disables systemd cgroups inside kind nodes to avoid certain OCI/cgroup failures.
-# We use systemd because Ubuntu 24.04 (cgroup v2) expects it
 containerdConfigPatches:
 - |-
   [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
     SystemdCgroup = true
-
 EOF
 
 # -------------------------
