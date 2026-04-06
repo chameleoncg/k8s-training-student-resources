@@ -1,11 +1,11 @@
 .PHONY: cluster gateway-api-crds cilium namespace deploy-base deploy configure-client deploy-app relax-http-realms status validate urls clean
 
-CLUSTER_NAME ?= oidc-lab
 NAMESPACE ?= oidc
 REALM ?= training
 CLIENT_ID ?= training-app
 CLIENT_SECRET ?=
 PUBLIC_IP ?= 127.0.0.1
+PORT ?= 8080
 CILIUM_VERSION ?= 1.19.2
 GATEWAY_API_VERSION ?= v1.2.0
 GATEWAY_API_MANIFEST ?= https://github.com/kubernetes-sigs/gateway-api/releases/download/$(GATEWAY_API_VERSION)/standard-install.yaml
@@ -13,14 +13,15 @@ GATEWAY_API_MANIFEST ?= https://github.com/kubernetes-sigs/gateway-api/releases/
 KEYCLOAK_HOST ?= keycloak.$(PUBLIC_IP).nip.io
 APP_HOST ?= app.$(PUBLIC_IP).nip.io
 
-KEYCLOAK_URL ?= http://$(KEYCLOAK_HOST):8080
-APP_URL ?= http://$(APP_HOST):8080
+KEYCLOAK_URL ?= http://$(KEYCLOAK_HOST):$(PORT)
+APP_URL ?= http://$(APP_HOST):$(PORT)
 REDIRECT_URI ?= $(APP_URL)/oauth2/callback
 POST_LOGOUT_REDIRECT_URI ?= $(APP_URL)/*
-RENDER_ENV = KEYCLOAK_HOST='$(KEYCLOAK_HOST)' APP_HOST='$(APP_HOST)' KEYCLOAK_URL='$(KEYCLOAK_URL)' APP_URL='$(APP_URL)' REDIRECT_URI='$(REDIRECT_URI)' POST_LOGOUT_REDIRECT_URI='$(POST_LOGOUT_REDIRECT_URI)'
+RENDER_ENV = KEYCLOAK_HOST='$(KEYCLOAK_HOST)' APP_HOST='$(APP_HOST)' PORT='$(PORT)' KEYCLOAK_URL='$(KEYCLOAK_URL)' APP_URL='$(APP_URL)' REDIRECT_URI='$(REDIRECT_URI)' POST_LOGOUT_REDIRECT_URI='$(POST_LOGOUT_REDIRECT_URI)'
 
+# create the cluster, run `make clean cluster` to recreate it
 cluster:
-	kind create cluster --config "$$tmp_file" --name trainting
+	kind create cluster --config kind-config.yaml --name training
 
 gateway-api-crds:
 	kubectl apply --server-side -f $(GATEWAY_API_MANIFEST)
@@ -35,7 +36,7 @@ cilium: gateway-api-crds
 		--set gatewayAPI.hostNetwork.enabled=true \
 		--set envoy.enabled=true \
 		--set operator.replicas=1 \
-		--set k8sServiceHost=$(CLUSTER_NAME)-control-plane \
+		--set k8sServiceHost=training-control-plane \
 		--set k8sServicePort=6443
 	kubectl rollout status daemonset/cilium -n kube-system --timeout=300s
 	kubectl rollout status deployment/cilium-operator -n kube-system --timeout=300s
@@ -79,6 +80,20 @@ deploy-app:
 		httproute/app-route \
 		--timeout=180s
 
+relax-http-realms:
+	kubectl exec -n $(NAMESPACE) deploy/keycloak -- \
+		/opt/keycloak/bin/kcadm.sh config credentials \
+		--server http://localhost:$(PORT) \
+		--realm master \
+		--user admin \
+		--password admin123admin >/dev/null
+	kubectl exec -n $(NAMESPACE) deploy/keycloak -- \
+		/opt/keycloak/bin/kcadm.sh update realms/master \
+		-s sslRequired=NONE >/dev/null
+	kubectl exec -n $(NAMESPACE) deploy/keycloak -- \
+		/opt/keycloak/bin/kcadm.sh update realms/$(REALM) \
+		-s sslRequired=NONE >/dev/null
+
 urls:
 	@echo "APP_URL=$(APP_URL)"
 	@echo "PUBLIC_IP=$(PUBLIC_IP)"
@@ -87,4 +102,4 @@ urls:
 	@echo "POST_LOGOUT_REDIRECT_URI=$(POST_LOGOUT_REDIRECT_URI)"
 
 clean:
-	kind delete cluster --name $(CLUSTER_NAME) || :
+	kind delete cluster --name training || :

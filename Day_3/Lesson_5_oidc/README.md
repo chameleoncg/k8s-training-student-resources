@@ -28,8 +28,6 @@ export PUBLIC_IP=1.2.3.4
 make urls
 ```
 
-If you change `PUBLIC_IP` after the lab is already deployed, rerun `make deploy` and `make deploy-app` so Keycloak, the Gateway routes, and `oauth2-proxy` are all regenerated with the new `nip.io` hostnames.
-
 ## Deploy The Base Lab
 
 ```bash
@@ -75,9 +73,3 @@ make deploy-app
 Then open the printed `APP_URL`.
 
 You should be redirected to Keycloak, log in as `student / studentpassword`, and then land on the echo app behind `oauth2-proxy`.
-
-## Notes
-
-* This lab intentionally stays on HTTP so the flow is easier to understand locally.
-* If you already deployed before this change and see `HTTPS required` on EC2, run `make relax-http-realms` once against the existing cluster.
-* This lab uses port `8080` because Cilium Gateway host-network mode recommends ports above `1023` unless you explicitly grant privileged bind capabilities to Envoy.
