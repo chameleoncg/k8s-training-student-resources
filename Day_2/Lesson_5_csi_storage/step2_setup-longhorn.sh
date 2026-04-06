@@ -22,6 +22,9 @@ sudo sysctl -w fs.inotify.max_user_watches=524288
 sudo sysctl -w fs.inotify.max_user_instances=512
 sudo sysctl -w net.ipv4.ip_forward=1
 
+
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
 # Persist settings across reboots.
 grep -q "fs.inotify.max_user_watches" /etc/sysctl.conf || echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
 grep -q "fs.inotify.max_user_instances" /etc/sysctl.conf || echo "fs.inotify.max_user_instances=512" | sudo tee -a /etc/sysctl.conf
@@ -48,12 +51,25 @@ kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
 - role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        cgroup-driver: systemd
 - role: worker
+  kubeadmConfigPatches:
+  - |
+    kind: JoinConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        cgroup-driver: systemd
   extraMounts:
-  - hostPath: /run/iscsid.gs
-    containerPath: /run/iscsid.gs
-  - hostPath: /run/systemd/resolve
-    containerPath: /run/systemd/resolve
+  - hostPath: /lib/modules
+    containerPath: /lib/modules
+    readOnly: true
+  - hostPath: /run/iscsid
+    containerPath: /run/iscsid
   - hostPath: /var/lib/iscsi
     containerPath: /var/lib/iscsi
   - hostPath: /dev
