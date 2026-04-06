@@ -47,5 +47,4 @@ kubectl version --client
 echo "--------------------------------------------------------"
 echo "INSTALLATION COMPLETE"
 echo "IMPORTANT: You MUST log out and log back in (or run 'newgrp docker')"
-echo "to apply the permissions changes"
 echo "--------------------------------------------------------"

@@ -56,14 +56,14 @@ nodes:
     kind: InitConfiguration
     nodeRegistration:
       kubeletExtraArgs:
-        cgroup-driver: systemd
+        cgroup-driver: cgroupfs
 - role: worker
   kubeadmConfigPatches:
   - |
     kind: JoinConfiguration
     nodeRegistration:
       kubeletExtraArgs:
-        cgroup-driver: systemd
+        cgroup-driver: cgroupfs
   extraMounts:
   - hostPath: /lib/modules
     containerPath: /lib/modules
@@ -80,7 +80,7 @@ nodes:
 containerdConfigPatches:
 - |-
   [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
-    SystemdCgroup = true
+    SystemdCgroup = false
 EOF
 
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -181,14 +181,47 @@ echo "--- Verification: iscsid running? ---"
 systemctl is-active --quiet iscsid && echo " iscsid service is active."
 
 # -------------------------
+# 3c) Pre-flight: verify CNI is actually healthy before Longhorn install
+# -------------------------
+echo "--- 3c. Pre-flight: checking CNI pods... ---"
+# Wait briefly for common CNI pods to appear
+kubectl get pods -A -o wide | grep -Ei 'cni|calico|cilium|flannel' || true
+
+# Fail fast if any CNI-related pods are not Running/Completed
+CNI_BAD="$(kubectl get pods -A --no-headers 2>/dev/null | grep -Ei 'cni|calico|cilium|flannel' || true)"
+echo "$CNI_BAD"
+
+echo "--- 3c. Pre-flight: checking CNI pods... ---"
+
+# Get only likely CNI pods
+CNI_PODS="$(kubectl get pods -A --no-headers 2>/dev/null | grep -Ei 'cni|calico|cilium|flannel' || true)"
+echo "$CNI_PODS"
+
+if [ -z "$CNI_PODS" ]; then
+  echo "ERROR: No CNI pods found yet. Skipping Longhorn install."
+  exit 1
+fi
+
+if echo "$CNI_PODS" | grep -Ei 'ContainerCreating|CrashLoopBackOff|Pending' >/dev/null; then
+  echo "ERROR: CNI pods not healthy yet. Skipping Longhorn install."
+  exit 1
+fi
+
+echo "CNI pre-flight looks ok. Proceeding to Longhorn install..."
+
+
+# -------------------------
 # 4) Install Longhorn
 # -------------------------
 echo "--- 4. Deploying Longhorn CSI (v1.6.0) ---"
 kubectl apply -f https://raw.githubusercontent.com/longhorn/longhorn/v1.6.0/deploy/longhorn.yaml
 
 
-# Force Longhorn to expect only 1 replica (since we only have 1 worker node)
-kubectl -n longhorn-system patch settings.longhorn.io default-replica-count --type merge -p '{"value": "1"}'
+if kubectl -n longhorn-system get settings.longhorn.io | grep -qi replica; then
+  kubectl -n longhorn-system patch settings.longhorn.io default-replica-count --type merge -p '{"value": "1"}' || true
+else
+  echo "Skipping default replica-count patch (setting key not found)."
+fi
 
 # -------------------------
 # 5) Wait for Longhorn control plane (defensive)
