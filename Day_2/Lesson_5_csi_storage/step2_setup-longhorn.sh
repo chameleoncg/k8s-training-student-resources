@@ -50,8 +50,10 @@ nodes:
 - role: control-plane
 - role: worker
   extraMounts:
-  - hostPath: /run
-    containerPath: /run
+  - hostPath: /run/iscsid.gs
+    containerPath: /run/iscsid.gs
+  - hostPath: /run/systemd/resolve
+    containerPath: /run/systemd/resolve
   - hostPath: /var/lib/iscsi
     containerPath: /var/lib/iscsi
   - hostPath: /dev
