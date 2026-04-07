@@ -234,12 +234,47 @@ kubectl get pods -n kube-system
 echo "--- 4. Deploying Longhorn CSI (v1.6.0) ---"
 kubectl apply -f https://raw.githubusercontent.com/longhorn/longhorn/v1.6.0/deploy/longhorn.yaml
 
+echo "--- Patching longhorn-manager to remove --upgrade-version-check ---"
 
-if kubectl -n longhorn-system get settings.longhorn.io | grep -qi replica; then
-  kubectl -n longhorn-system patch settings.longhorn.io default-replica-count --type merge -p '{"value": "1"}' || true
+# Compute BOTH container_index and command_index for the exact flag we want removed
+PATCH_RESULT="$(
+kubectl -n longhorn-system get ds longhorn-manager -o json | python3 -c '
+import json,sys
+d=json.load(sys.stdin)
+spec=d["spec"]["template"]["spec"]
+cs=spec["containers"]
+for ci,c in enumerate(cs):
+  if c.get("name")=="longhorn-manager":
+    cmd=c.get("command",[]) or []
+    for i,a in enumerate(cmd):
+      if a=="--upgrade-version-check":
+        print(ci, i)
+        sys.exit(0)
+print("NONE NONE")
+'
+)"
+
+if echo "$PATCH_RESULT" | grep -q "NONE"; then
+  echo "Flag --upgrade-version-check not found; skipping patch."
 else
-  echo "Skipping default replica-count patch (setting key not found)."
+  CONTAINER_INDEX="$(echo "$PATCH_RESULT" | awk '{print $1}')"
+  CMD_INDEX="$(echo "$PATCH_RESULT" | awk '{print $2}')"
+  echo "Removing --upgrade-version-check at containers/${CONTAINER_INDEX}/command/${CMD_INDEX}"
+
+  kubectl -n longhorn-system patch ds/longhorn-manager --type='json' -p="[
+    {\"op\":\"remove\",\"path\":\"/spec/template/spec/containers/${CONTAINER_INDEX}/command/${CMD_INDEX}\"}
+  ]" || true
+
+  # Restart once (not twice)
+  kubectl -n longhorn-system rollout restart ds/longhorn-manager || true
+
+  # Verification: print manager command args (so you can see the flag is gone)
+  echo "--- longhorn-manager command after patch ---"
+  kubectl -n longhorn-system get ds longhorn-manager -o jsonpath='{range .spec.template.spec.containers[?(@.name=="longhorn-manager")].command[*]}{.}{"\n"}{end}' || true
 fi
+
+# Wait for DS rollout to complete before continuing
+kubectl -n longhorn-system rollout status ds/longhorn-manager --timeout=3m || true
 
 # -------------------------
 # 5) Wait for Longhorn control plane (defensive)
