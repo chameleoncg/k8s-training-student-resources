@@ -1,0 +1,11 @@
+services:
+  obscurity-demo:
+    image: caddy:alpine
+    container_name: obscurity-demo
+    ports:
+      - "8080:80"
+    environment:
+      CREATED_VIA: "Docker Compose"
+    volumes:
+      - ./obscurity:/usr/share/caddy:ro
+    command: caddy file-server --root /usr/share/caddy --templates --access-log
