@@ -1,1 +1,1 @@
-doitlive play demo.sh
+./run-demo.sh

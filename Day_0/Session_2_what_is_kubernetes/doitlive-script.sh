@@ -20,37 +20,66 @@ ls obscurity/
 #Uh oh...this gets complicated.
 docker run --rm --name obscurity-demo -e CREATED_VIA="Docker Run" -v $(pwd)/obscurity:/usr/share/caddy:ro -p 8080:80 caddy:alpine caddy file-server --root /usr/share/caddy --templates --access-log
 #
-#Great! Now do that again 100 times...
+#Method: Docker Run
+#
+#docker run \
+#  --rm \
+#  --name obscurity-demo \
+#  -e CREATED_VIA="Docker Run" \
+#  -v $(pwd)/obscurity:/usr/share/caddy:ro \
+#  -p 8080:80 \
+#  caddy:alpine \
+#  caddy file-server --root /usr/share/caddy --templates --access-log
+#
+#Q: Where is the complexity compared to other methods?
+#Q: What would this be like to scale 100+ times?
+#Q: How does networking work?
+
 clear
 
 
-#Compose makes the complexity easier.
+#Compose moves the complexity around.
 cat compose.yaml
 
 #
-#Now that we've declared, execution is simple.
-docker compose up
-docker compose down
+#Now that we've defined, declaration is simple.
+docker compose -f compose.yaml up
+docker compose -f compose.yaml down
 #
-#Great! Now do that again 100 times...
+#Method: Docker Compose
+#
+#docker compose -f compose.yaml up
+#
+#Q: Where is the complexity compared to other methods?
+#Q: What would this be like to scale 100+ times?
+#Q: How does networking work?
 clear
 
 
-#Let's start a local cluster
+#Kubernetes enables scale. Let's start with a local cluster.
 cat kind-config.yaml
 kind create cluster --name obscurity-cluster --config kind-config.yaml
 clear
 
 
-#The complexity of scale makes our declarations much larger...
+#The complexity of scale makes our definitions much larger...
 cat manifest.yaml
 
 #
-#But executing at scale is made simple.
+#But now declarations of scale are made simple.
 kubectl apply -f manifest.yaml
 kubectl get pods -n obscurity-demo -w
 #
 kubectl logs -f obscurity-pod -n obscurity-demo
+
+#
+#Method: Kubernetes Manifest
+#
+#kubectl apply -f manifest.yaml
+#
+#Q: Where is the complexity compared to other methods?
+#Q: What would this be like to scale 100+ times?
+#Q: How does networking work?
 clear
 
 
