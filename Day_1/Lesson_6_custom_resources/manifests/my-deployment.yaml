@@ -1,5 +1,5 @@
 ---
-apiVersion: clarity.io/v1betas
+apiVersion: clarity.io/v1beta1
 kind: MissionDeployment 
 metadata:
     name: my-deployment
