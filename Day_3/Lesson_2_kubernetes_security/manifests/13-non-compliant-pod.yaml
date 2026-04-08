@@ -1,0 +1,17 @@
+# Pod Security Lab - A pod that VIOLATES the 'restricted' Pod Security Standard
+# This should be REJECTED when the namespace has enforce: restricted
+apiVersion: v1
+kind: Pod
+metadata:
+  name: non-compliant-pod
+  namespace: default
+spec:
+  containers:
+  - name: app
+    image: nginx:latest
+    # Violations:
+    # 1. No runAsNonRoot: true
+    # 2. No allowPrivilegeEscalation: false
+    # 3. No seccompProfile
+    # 4. No capabilities.drop
+    # Standard nginx runs as root (UID 0) -- violates restricted policy

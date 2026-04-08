@@ -1,0 +1,20 @@
+# Network Policy Lab - Step 2: Allow ingress only from pods labeled role=client
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client-ingress
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      role: server
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          role: client
+    ports:
+    - protocol: TCP
+      port: 80

@@ -1,0 +1,23 @@
+# Security Context Demo - Pod with hardened security settings
+apiVersion: v1
+kind: Pod
+metadata:
+  name: security-context-demo
+  namespace: default
+spec:
+  securityContext:
+    runAsUser: 1000        # Run as non-root user (UID 1000)
+    runAsGroup: 3000       # Primary group GID 3000
+    fsGroup: 2000          # Volume files owned by GID 2000
+    runAsNonRoot: true     # Refuse to start if image runs as root
+  containers:
+  - name: app
+    image: busybox:1.28
+    command: ["sleep", "3600"]
+    securityContext:
+      allowPrivilegeEscalation: false   # No sudo / SUID escalation
+      readOnlyRootFilesystem: true      # Immutable container filesystem
+      capabilities:
+        drop: ["ALL"]                   # Drop all Linux capabilities
+      seccompProfile:
+        type: RuntimeDefault            # Use container runtime's seccomp profile

@@ -1,0 +1,14 @@
+# RBAC Lab - Step 2: Bind the Role to the lab-viewer ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-pods-binding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: lab-viewer
+  namespace: default
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io

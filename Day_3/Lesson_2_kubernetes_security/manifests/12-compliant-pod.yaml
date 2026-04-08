@@ -1,0 +1,20 @@
+# Pod Security Lab - A pod that complies with the 'restricted' Pod Security Standard
+apiVersion: v1
+kind: Pod
+metadata:
+  name: compliant-pod
+  namespace: default
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: app
+    image: nginxinc/nginx-unprivileged:latest   # nginx image designed to run as non-root
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: false   # nginx needs to write tmp files
+      capabilities:
+        drop: ["ALL"]

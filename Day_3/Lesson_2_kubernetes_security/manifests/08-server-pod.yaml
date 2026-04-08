@@ -1,0 +1,14 @@
+# Network Policy Lab - The server pod (nginx)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: server-pod
+  namespace: default
+  labels:
+    role: server
+spec:
+  containers:
+  - name: nginx
+    image: nginx:latest
+    ports:
+    - containerPort: 80

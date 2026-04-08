@@ -1,0 +1,18 @@
+# RBAC Lab - Step 3: ServiceAccount + Pod to test RBAC permissions
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lab-viewer
+  namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rbac-test-pod
+  namespace: default
+spec:
+  serviceAccountName: lab-viewer
+  containers:
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command: ["sleep", "3600"]
