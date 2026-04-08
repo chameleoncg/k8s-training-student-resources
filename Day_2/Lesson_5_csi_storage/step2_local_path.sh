@@ -1,36 +1,19 @@
 #!/bin/bash
-# Script: kind + Local Path Provisioner (no Longhorn)
-
 set -euo pipefail
 
-# -------------------------
-# 0) Host kernel / limits (optional but kept)
-# -------------------------
-echo "--- 0. Optimizing Host Resource Limits & Kernel ---"
+CLUSTER_NAME="localpath-lab"
 
+echo "--- 0) Optimizing Host Resource Limits & Kernel (optional) ---"
 sudo sysctl -w fs.inotify.max_user_watches=524288
 sudo sysctl -w fs.inotify.max_user_instances=512
 sudo sysctl -w net.ipv4.ip_forward=1
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
-# Persist settings across reboots.
-grep -q "fs.inotify.max_user_watches" /etc/sysctl.conf || echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
-grep -q "fs.inotify.max_user_instances" /etc/sysctl.conf || echo "fs.inotify.max_user_instances=512" | sudo tee -a /etc/sysctl.conf
-grep -q "net.ipv4.ip_forward" /etc/sysctl.conf || echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
-
-echo "Host limits and kernel forwarding optimized."
-
-# -------------------------
-# 0b) Restart container runtime (best-effort)
-# -------------------------
-echo "--- 0b. Refreshing Container Runtime ---"
+echo "--- 0b) Refreshing Container Runtime (best-effort) ---"
 sudo systemctl daemon-reload
 sudo systemctl restart docker
 
-# -------------------------
-# 1) kind cluster config
-# -------------------------
-echo "--- 1. Creating Kind 2-Node Configuration (1 control-plane, 1 worker) ---"
+echo "--- 1) Creating kind cluster ---"
 
 cat <<'EOF' > kind-config.yaml
 kind: Cluster
@@ -50,100 +33,66 @@ nodes:
     nodeRegistration:
       kubeletExtraArgs:
         cgroup-driver: cgroupfs
-  # Local-path does not require iSCSI mounts/devices.
 containerdConfigPatches:
 - |-
   [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
     SystemdCgroup = false
 EOF
 
-# -------------------------
-# 2) Create the kind cluster
-# -------------------------
-echo "--- 2. Building 2-Node Kubernetes Cluster ---"
-
-kind delete cluster --name longhorn-lab || true
+kind delete cluster --name "$CLUSTER_NAME" || true
 docker network prune -f || true
+kind create cluster --name "$CLUSTER_NAME" --config kind-config.yaml --wait 15m
 
-kind create cluster --name longhorn-lab --config kind-config.yaml --wait 15m
-
-# Wait for Kubernetes nodes to be Ready.
-echo "--- Verification: Check if nodes are online ---"
+echo "--- Verification: nodes ready ---"
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 kubectl get nodes
-echo "Cluster nodes are Ready."
 
-# -------------------------
-# 3) Ensure Local Path Provisioner is installed
-# -------------------------
-echo "--- 3. Ensuring Local Path Provisioner is installed ---"
+echo "--- 2) Ensuring Local Path Provisioner installed (smart) ---"
 
-# Check if local-path-provisioner exists (common in kind).
-if kubectl -n kube-system get deploy local-path-provisioner >/dev/null 2>&1; then
-  echo "Local path provisioner deployment already exists."
+LP_NS="$(kubectl get deploy local-path-provisioner -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"\n"}{end}' 2>/dev/null | head -n1 || true)"
+if [ -z "$LP_NS" ]; then
+  echo "Local Path provisioner not found. Installing into kube-system..."
+  kubectl apply -f <(curl -fsSL https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml \
+    | sed 's/namespace: default/namespace: kube-system/g')
+  LP_NS="kube-system"
 else
-  echo "Local path provisioner not found; installing it..."
-  # Kind commonly uses this local-path-provisioner; install explicitly if missing.
-  kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
+  echo "Found local-path-provisioner in namespace: $LP_NS (skipping install)."
 fi
 
-kubectl -n kube-system rollout status deploy/local-path-provisioner --timeout=180s || true
-kubectl -n kube-system get pods | grep -i local-path || true
+kubectl -n "$LP_NS" rollout status deploy/local-path-provisioner --timeout=180s || true
 
-# -------------------------
-# 4) Configure default StorageClass to Local Path
-# -------------------------
-echo "--- 4. Setting Local Path StorageClass as default ---"
+echo "--- 3) Configure default StorageClass (detect by provisioner) ---"
 
-echo "Current StorageClasses:"
-kubectl get sc
+LP_SC="$(kubectl get sc -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.provisioner}{"\n"}{end}' \
+  | awk -F'\t' '$2 ~ /rancher.io\/local-path/ {print $1; exit}')"
 
-# Common name is "standard" for local-path provisioner in kind.
-# If it differs in your environment, adjust STD_SC accordingly.
-STD_SC="standard"
-
-# If "standard" doesn't exist, try to find any storageclass using rancher.io/local-path.
-if ! kubectl get sc "${STD_SC}" >/dev/null 2>&1; then
-  echo "StorageClass '${STD_SC}' not found; detecting local-path SC..."
-  STD_SC="$(kubectl get sc -o name | xargs -n1 -I{} kubectl get {} -o jsonpath='{.metadata.name}{"\t"}{.provisioner}{"\n"}' \
-    | awk '$2 ~ /local-path/ {print $1; exit}')"
-fi
-
-if [ -z "${STD_SC}" ]; then
-  echo "ERROR: Could not determine Local Path StorageClass name."
+if [ -z "$LP_SC" ]; then
+  echo "ERROR: Could not detect Local Path StorageClass."
   exit 1
 fi
 
-echo "Using Local Path StorageClass: ${STD_SC}"
-
-# Remove default annotation from all SCs
 kubectl get sc -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}{"\n"}{end}' \
-| awk '$2=="true"{print $1}' \
-| while read -r sc; do
-    kubectl patch storageclass "$sc" \
-      -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' || true
-  done
+  | awk -F'\t' '$2=="true"{print $1}' \
+  | while read -r sc; do
+      kubectl patch storageclass "$sc" \
+        -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' >/dev/null 2>&1 || true
+    done
 
-# Set target SC as default
-kubectl patch storageclass "${STD_SC}" \
-  -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' || true
+kubectl patch storageclass "$LP_SC" \
+  -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' >/dev/null 2>&1 || true
 
-echo "Updated StorageClasses:"
-kubectl get sc
+echo "Using Local Path StorageClass: $LP_SC"
 
-# -------------------------
-# 5) Quick “done” validation: write /data/hello.txt to a PVC
-# -------------------------
-echo "--- 5. Quick verification: write /data/hello.txt to PVC ---"
+echo "--- 4) Quick “done” verification: write /data/hello.txt ---"
 
-cat <<'YAML' | kubectl apply -f -
+cat <<YAML | kubectl apply -f -
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: localpath-hello-pvc
 spec:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: ${STD_SC}
+  storageClassName: ${LP_SC}
   resources:
     requests:
       storage: 1Gi
