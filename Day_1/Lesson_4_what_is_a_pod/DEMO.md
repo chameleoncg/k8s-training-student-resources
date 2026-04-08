@@ -49,7 +49,7 @@ Run:
 
 `kubectl port-forward pod/basic-nginx 8080:80`
 
-Then visit `http://localhost:8080` in your browser to confirm nginx is serving traffic.
+Then visit `http://localhost:8080` in your browser or use `curl http://localhost:8080` to confirm nginx is serving traffic.
 
 Stop port-forward with `Ctrl+C` when done.
 
@@ -99,7 +99,7 @@ Run:
 
 `kubectl port-forward pod/multi-container-demo 8081:80`
 
-Open `http://localhost:8081` and confirm the page content includes:
+Open `http://localhost:8081` or `wget http://localhost:8081` and confirm the page content includes:
 
 `Hello from the Init Container!`
 
@@ -132,7 +132,7 @@ Exit shell with:
 ### 7) Cleanup multi-container pod
 Run:
 
-`kubectl delete -f manifests/multi-container-pod.yaml`
+`kubectl delete -f manifests/multi-container-pod.yaml --grace-period=0 --force`
 
 ---
 

@@ -10,7 +10,11 @@ spec:
     - name: setup-data
       image: busybox:1.28
       command:
-        ["sh", "-c", "echo 'Hello from the Init Container!' > /data/index.html"]
+        [
+          "sh",
+          "-c",
+          "echo 'Hello from the Init Container!' > /data/index.html && sleep 30",
+        ]
       volumeMounts:
         - name: shared-storage
           mountPath: /data
@@ -28,7 +32,11 @@ spec:
     - name: log-sidecar
       image: busybox:1.28
       command:
-        ["sh", "-c", "while true; do date >> /var/log/app.log; sleep 5; done"]
+        [
+          "sh",
+          "-c",
+          "while true; do echo 'Writing to log'; date >> /var/log/app.log; sleep 5; done",
+        ]
       volumeMounts:
         - name: log-storage
           mountPath: /var/log
