@@ -1,14 +1,6 @@
 #!/bin/bash
 # Step 2: Create a kind cluster and install Longhorn
-#
-# What this script does (high-level):
-#  1) Tunes host kernel limits (inotify, ip_forward)
-#  2) Creates a 2-node kind cluster (1 control-plane, 1 worker)
-#  3) Installs iSCSI tooling on the host (open-iscsi, nfs-common)
-#  4) Installs iSCSI tooling INSIDE the kind node containers as well
-#     (Longhorn's engine relies on node namespace iSCSI behavior)
-#  5) Installs Longhorn v1.6.0 and waits a bit
-#  6) Sets Longhorn StorageClass as the default
+
 
 set -euo pipefail
 
@@ -32,7 +24,7 @@ grep -q "net.ipv4.ip_forward" /etc/sysctl.conf || echo "net.ipv4.ip_forward=1" |
 echo "Host limits and kernel forwarding optimized."
 
 # -------------------------
-# 0b) Restart container runtime (best-effort)
+# Restart container runtime (best-effort)
 # -------------------------
 echo "--- 0b. Refreshing Container Runtime ---"
 sudo systemctl daemon-reload
@@ -347,8 +339,6 @@ wait_longhorn
 # -------------------------
 kubectl get pods -n longhorn-system
 echo "Longhorn control plane is Running (or at least controllers have reached readiness)."
-
-
 
 
 
