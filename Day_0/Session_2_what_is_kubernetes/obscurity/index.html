@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link href="https://fonts.googleapis.com/css2?family=Work+Sans&display=swap" rel="stylesheet">
+    <title>Top Sneaky</title>
+</head>
+<body>
+    <img id="render" src="website.png" style="width:100%; height:auto; object-fit:contain;">
+    <h1 id="status" style="font-family: 'Work Sans', sans-serif; text-align: left">Created via: {{env "CREATED_VIA"}}</h1>
+    <script>
+        async function checkAvailability() {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 800);
+
+            try {
+                // Use 'no-cache' to ensure we are actually hitting the server
+                const response = await fetch(window.location.href, { 
+                    method: 'HEAD', // HEAD is faster than GET for just checking existence
+                    signal: controller.signal,
+                    cache: 'no-store'
+                });
+
+                if (response.ok) {
+                    // If we were offline and now we are back, reload the whole page
+                    if (document.body.style.backgroundColor === "rgb(128, 128, 128)") {
+                        window.location.reload();
+                    }
+                } else {
+                    throw new Error("Server returned error status");
+                }
+            } catch (err) {
+                // Trigger the 'Offline' UI
+                document.body.style.backgroundColor = "#808080";
+                
+                const status = document.getElementById('status');
+                if (status) {
+                    status.innerText = "Page Offline";
+                    status.style.color = "white";
+                    status.style.marginTop = "45vh";
+                }
+
+                const img = document.getElementById('render');
+                if (img) {
+                    img.style.display = "none";
+                }
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        }
+
+        // Check every 2 seconds to give the browser breathing room
+        setInterval(checkAvailability, 2000);
+    </script>
+</body>
+</html>
