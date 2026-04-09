@@ -1,3 +1,4 @@
+# Manifests are usually generated
 apiVersion: v1
 kind: Namespace
 metadata:

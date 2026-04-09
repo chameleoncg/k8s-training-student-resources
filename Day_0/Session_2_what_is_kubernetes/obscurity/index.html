@@ -6,7 +6,7 @@
 </head>
 <body>
     <img id="render" src="website.png" style="width:100%; height:auto; object-fit:contain;">
-    <h1 id="status" style="font-family: 'Work Sans', sans-serif; text-align: left">Created via: {{env "CREATED_VIA"}}</h1>
+    <h1 id="status" style="font-family: 'Work Sans', sans-serif; text-align: right">Created via: {{env "CREATED_VIA"}}</h1>
     <script>
         async function checkAvailability() {
             const controller = new AbortController();

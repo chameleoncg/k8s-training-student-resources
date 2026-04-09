@@ -1,3 +1,4 @@
+# Compose files are often handwritten
 services:
   obscurity-demo:
     image: caddy:alpine
