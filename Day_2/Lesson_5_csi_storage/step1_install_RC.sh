@@ -57,6 +57,9 @@ kubectl --context "$KIND_CONTEXT" apply -f "${ROOK_URL}/common.yaml"
 kubectl --context "$KIND_CONTEXT" apply -f "${ROOK_URL}/crds.yaml"
 kubectl --context "$KIND_CONTEXT" apply -f "${ROOK_URL}/operator.yaml"
 
+kubectl --context "$KIND_CONTEXT" apply -f "${ROOK_URL}/csi-operator.yaml"
+kubectl --context "$KIND_CONTEXT" -n rook-ceph rollout status deployment -w --timeout=600s
+
 echo "Waiting for Operator deployment..."
 kubectl --context "$KIND_CONTEXT" -n rook-ceph rollout status deployment/rook-ceph-operator --timeout=600s
 
@@ -72,15 +75,16 @@ kubectl --context "$KIND_CONTEXT" apply -f "${ROOK_URL}/csi/rbd/storageclass-tes
 kubectl --context "$KIND_CONTEXT" patch storageclass rook-ceph-block \
   -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' || true
 
-echo "--- 9. Waiting for Ceph Cluster to Initialise ---"
-echo "This may take 3-5 minutes depending on your VM speed..."
-until kubectl --context "$KIND_CONTEXT" -n rook-ceph get cephblockpool replicapool &>/dev/null; do
-    echo -n "."
-    sleep 5
-done
-echo ""
 
-echo "--- 10. Waiting for StorageClass to be usable ---"
+echo "--- 9. Waiting for CSI RBD CSIDriver registration ---"
+CSIDRIVER_NAME="rook-ceph.rbd.csi.ceph.com"
+
+until kubectl --context "$KIND_CONTEXT" get csidriver "$CSIDRIVER_NAME" >/dev/null 2>&1; do
+  echo "Waiting for CSIDriver $CSIDRIVER_NAME to appear..."
+  kubectl --context "$KIND_CONTEXT" -n rook-ceph get pods | egrep -i 'csi|rbd|ceph' || true
+  sleep 5
+done
+echo "CSIDriver $CSIDRIVER_NAME is registered."
 kubectl --context "$KIND_CONTEXT" get storageclass rook-ceph-block >/dev/null
 
 

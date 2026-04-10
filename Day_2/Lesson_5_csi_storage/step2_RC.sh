@@ -5,24 +5,25 @@ CLUSTER_NAME="rook-ceph-lab"
 KIND_CONTEXT="kind-${CLUSTER_NAME}"
 
 echo "--- [Script2] Rook-Ceph Verification ---"
-
 RC_SC="rook-ceph-block"
-echo "Checking for StorageClass: $RC_SC..."
+NS="default"
+PVC_NAME="rook-ceph-verify-pvc"
+POD_NAME="rook-ceph-verify-writer"
 
-kubectl --context "$KIND_CONTEXT" get sc "$RC_SC" &>/dev/null || {
-  echo "ERROR: Rook-Ceph StorageClass ($RC_SC) not found! Did Script 1 finish successfully?"
+kubectl --context "$KIND_CONTEXT" get sc "$RC_SC" >/dev/null || {
+  echo "ERROR: StorageClass $RC_SC not found"
   exit 1
 }
 
 echo "--- 2. Creating PVC and Verification Pod ---"
-cat <<YAML | kubectl --context "$KIND_CONTEXT" apply -f -
+cat <<YAML | kubectl --context "$KIND_CONTEXT" -n "$NS" apply -f -
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: rook-ceph-verify-pvc
+  name: ${PVC_NAME}
 spec:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: $RC_SC
+  storageClassName: ${RC_SC}
   resources:
     requests:
       storage: 1Gi
@@ -30,30 +31,40 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: rook-ceph-verify-writer
+  name: ${POD_NAME}
 spec:
   restartPolicy: Never
   containers:
   - name: tester
     image: busybox:1.36
-    command: ["sh","-c","echo \"Ceph-Storage-Verified-$(date)\" > /data/verify.txt; sleep 10"]
+    command: ["sh","-c","echo \"Ceph-Storage-Verified-$(date -u)\" > /data/verify.txt; sleep 10"]
     volumeMounts:
     - name: ceph-vol
       mountPath: /data
   volumes:
   - name: ceph-vol
     persistentVolumeClaim:
-      claimName: rook-ceph-verify-pvc
+      claimName: ${PVC_NAME}
 YAML
 
-echo "--- 3. Waiting for Pod Ready ---"
-kubectl --context "$KIND_CONTEXT" wait \
-  --for=condition=Ready pod/rook-ceph-verify-writer \
-  --timeout=300s
+echo "--- 3. Waiting for PVC to bind  ---"
+set +e
+kubectl --context "$KIND_CONTEXT" -n "$NS" wait --for=condition=Bound pvc/"$PVC_NAME" --timeout=10m
+RC=$?
+set -e
+if [ $RC -ne 0 ]; then
+  echo "ERROR: PVC did not bind. Dumping diagnostics..."
+  kubectl --context "$KIND_CONTEXT" -n "$NS" describe pvc/"$PVC_NAME" || true
+  kubectl --context "$KIND_CONTEXT" -n rook-ceph get pods || true
+  kubectl --context "$KIND_CONTEXT" get csidriver | egrep 'rook|ceph|rbd' || true
+  exit $RC
+fi
 
-echo "--- 4. Verifying Data Integrity ---"
-FILE_CONTENT=$(kubectl --context "$KIND_CONTEXT" exec pod/rook-ceph-verify-writer -- cat /data/verify.txt)
+echo "--- 4. Waiting for Pod Ready ---"
+kubectl --context "$KIND_CONTEXT" -n "$NS" wait --for=condition=Ready pod/"$POD_NAME" --timeout=5m
 
+echo "--- 5. Verifying data integrity ---"
+FILE_CONTENT=$(kubectl --context "$KIND_CONTEXT" -n "$NS" exec "$POD_NAME" -- cat /data/verify.txt)
 echo "--------------------------------------------------------"
 echo "VERIFICATION SUCCESSFUL"
 echo "Data read from Ceph: $FILE_CONTENT"
