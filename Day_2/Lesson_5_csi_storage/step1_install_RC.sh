@@ -52,7 +52,7 @@ kubectl --context "$KIND_CONTEXT" apply -f "${ROOK_URL}/crds.yaml"
 kubectl --context "$KIND_CONTEXT" apply -f "${ROOK_URL}/operator.yaml"
 
 echo "Waiting for Operator deployment..."
-kubectl --context "$KIND_CONTEXT" -n rook-ceph rollout status deployment/rook-ceph-operator --timeout=180s
+kubectl --context "$KIND_CONTEXT" -n rook-ceph rollout status deployment/rook-ceph-operator --timeout=600s
 
 echo "--- 7. Installing Rook-Ceph Cluster (Test Mode) ---"
 kubectl --context "$KIND_CONTEXT" apply -f "${ROOK_URL}/cluster-test.yaml"
