@@ -48,10 +48,11 @@ cat <<YAML | kubectl --context "$KIND_CONTEXT" apply -f -
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: localpath-hello-pvc
+  name: rook-ceph-hello-pvc
 spec:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: ${LP_SC}
+  # Pointing to the Rook-Ceph Block StorageClass
+  storageClassName: rook-ceph-block
   resources:
     requests:
       storage: 1Gi
@@ -59,20 +60,21 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: localpath-hello-writer
+  name: rook-ceph-hello-writer
 spec:
   restartPolicy: Never
   containers:
   - name: t
     image: busybox:1.36
-    command: ["sh","-c","echo hello-$(date) > /data/hello.txt; sleep 5"]
+    # This remains an ephemeral task: write data, sleep briefly, then exit
+    command: ["sh","-c","echo rook-ceph-hello-\$(date) > /data/hello.txt; sleep 5"]
     volumeMounts:
     - name: vol
       mountPath: /data
   volumes:
   - name: vol
     persistentVolumeClaim:
-      claimName: localpath-hello-pvc
+      claimName: rook-ceph-hello-pvc
 YAML
 
 kubectl --context "$KIND_CONTEXT" wait --for=condition=Ready pod/localpath-hello-writer --timeout=120s || true
