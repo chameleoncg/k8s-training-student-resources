@@ -1,0 +1,22 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: weaponized-pod-01
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: weaponized-pod-01
+  name: alpine
+spec:
+  terminationGracePeriodSeconds: 0
+  hostPID: true
+  containers:
+    - name: alpine
+      image: alpine:latest
+      command:
+        - sleep
+        - infinity
+      securityContext:
+        privileged: true
