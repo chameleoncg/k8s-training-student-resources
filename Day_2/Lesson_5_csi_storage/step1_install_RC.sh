@@ -36,8 +36,6 @@ nodes:
   extraMounts:
   - hostPath: /dev
     containerPath: /dev
-  - hostPath: /lib/modules
-    containerPath: /lib/modules
 EOF
 
 kind create cluster --name "$CLUSTER_NAME" --config kind-config.yaml --wait 0s
