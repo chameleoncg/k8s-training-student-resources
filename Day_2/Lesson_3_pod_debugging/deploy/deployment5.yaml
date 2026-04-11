@@ -1,0 +1,182 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: service5-tls
+  namespace: debugging
+type: kubernetes.io/tls
+stringData:
+  tls.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIDsDCCApigAwIBAgIUNSS8A/FoTJuzOZ446hA25ts/W44wDQYJKoZIhvcNAQEL
+    BQAwGzEZMBcGA1UEAwwQZGVidWdnaW5nLWxhYi1jYTAeFw0yNjA0MTEwMzUwMDha
+    Fw0zNjA0MDgwMzUwMDhaMC8xLTArBgNVBAMMJHNlcnZpY2U1LmRlYnVnZ2luZy5z
+    dmMuY2x1c3Rlci5sb2NhbDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEB
+    ALvyq+t0sQlkURjpnFTsZ30BXOKUWkiy5XkVyG0OH1mkeKQj/wxsUktuGcWBnjku
+    k/7j3gawOkKIdljkMf6vdoGAmLpERD+BytYMMUgPSmjQBCzxebN9f9zrE+PRU1YW
+    Bhecm9dmFFyNPrsIjMV+/mTTFa6S9Vri70irqfHzR00ULzDs/hBXZnPdnnM8bho6
+    yg4dIYh6Q79AertOKm3ETzTWDL/d5EbitjfjMhSOX2WELWMma7XZfGfg0igatTXH
+    yA7CAU7WCwg/uEuNAqD5uX5XJIH0S5Y9btFonBsRmSuK/hL66bEAE9K3234AuB75
+    KaYPXi/zs0uAIthZmoHJNeECAwEAAaOB1zCB1DBlBgNVHREEXjBcgghzZXJ2aWNl
+    NYISc2VydmljZTUuZGVidWdnaW5nghZzZXJ2aWNlNS5kZWJ1Z2dpbmcuc3ZjgiRz
+    ZXJ2aWNlNS5kZWJ1Z2dpbmcuc3ZjLmNsdXN0ZXIubG9jYWwwCQYDVR0TBAIwADAL
+    BgNVHQ8EBAMCBaAwEwYDVR0lBAwwCgYIKwYBBQUHAwEwHQYDVR0OBBYEFDS2VqmG
+    X2pZAX8rVO6oEGaYBnfVMB8GA1UdIwQYMBaAFLb4rHQVPJw32RUEXnfpWyIYI82H
+    MA0GCSqGSIb3DQEBCwUAA4IBAQBmupUZfSUEoyUe0Ug5fBty0d+GhK6u3phghlGR
+    cE8BoPXhcUuGCZoXFZhCIYUxNHQBwnCnZGhkekRS9TzUk7lIzpWtdNfqTltJVKuK
+    OcysPp6gBrTRR76qMgUaNQMMGQ2S+PgrnBzfdHuDp3/iK/E0tbZRRFKICJK0ly9C
+    g2/BbWq3zFHBxnm3NrAZg31Jm0/yGr0PCArMMMjQ5A59jFuxgNnjawnIB8HxyhZI
+    tkUAvMTJSqxfVaulJ163ZEYYKi9X3efeAN+KScjFWsTBVoFg8+BFwlvoFHs6i/AH
+    9jP557U5RghnzVLB2uYNvKXwl0JSPyiG6ru8OxKQ5acnEEPP
+    -----END CERTIFICATE-----
+  tls.key: |
+    -----BEGIN PRIVATE KEY-----
+    MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC78qvrdLEJZFEY
+    6ZxU7Gd9AVzilFpIsuV5FchtDh9ZpHikI/8MbFJLbhnFgZ45LpP+494GsDpCiHZY
+    5DH+r3aBgJi6REQ/gcrWDDFID0po0AQs8XmzfX/c6xPj0VNWFgYXnJvXZhRcjT67
+    CIzFfv5k0xWukvVa4u9Iq6nx80dNFC8w7P4QV2Zz3Z5zPG4aOsoOHSGIekO/QHq7
+    TiptxE801gy/3eRG4rY34zIUjl9lhC1jJmu12Xxn4NIoGrU1x8gOwgFO1gsIP7hL
+    jQKg+bl+VySB9EuWPW7RaJwbEZkriv4S+umxABPSt9t+ALge+SmmD14v87NLgCLY
+    WZqByTXhAgMBAAECggEACtuTxh8kWlub0gOubOtIlfyX+yy4+8POfRCWpuKyydLm
+    J4zfD06bcTk9xsbEf08PHJG5ThN8lSMFK8DYmMsWDniRcirPEshmsXeMOgqMmNoi
+    EJ7dYhK3KhoASNgrH2E3tkHdUKv4c4mTIPrXJ5Js48IcSbzajObo7g7BO02brhKZ
+    6DiJHlCjfT4QSjQ5qhi+iB6jALGJCMDhzM5c83ERFynDwQncWqXuvVbUqZRci0kF
+    06lk9BOTg6AXDJ/sE8IxJcL55gCtydvDpzph52gfG+GH93FqRubu64m2hTEzS+8B
+    j0rrvVvF/CYRyP7FKvBPkykPsNPLy6JHronrYl2FEQKBgQDdWMIQDS75vQdpPLL5
+    RJBvI+rRR1xtXZGLbyKubMSxUc4y1uLnr7yssmNBD83FuPxlnSOtXOZbdZiUK8rN
+    zYl6746uyPHXaS0CxgRqGZ5RB+p25PXFQmtfQACxznI1i6vmZ8YXmoaKxzUIZktW
+    xBQ9SFD7DRROob6X2hFPjIHh8QKBgQDZX1dNG6fcbcYMsVThfluRsGlAg/PrxWbv
+    whT1jatGmGvocarujzWqB1oz9Nki/jPI5MHLXqyKGxx6b+MuE0T0hJZQjQc2JEyZ
+    wdP/AMTiZ4fvBW57jhIQNljhGwyQqSCKl565AjFzLSNYoXO9NM+MEdXGk/MF9EKP
+    IDxjmhmi8QKBgQDTV78bsmrK+6kK23ELvmKmK8Y2gouGxROF7dxQbPw1TqWyNyk6
+    DLr6re1FHwDbrDAaGbsJ+azdYOAJgfLHJFwDbJ5w1t7LTdozTrzCTamzNvqxARaF
+    fVCmBqdjHnpAFBdTDHzA5sNV2LUTSxDeTKQCi3z+6FMebSNdPFLRAJi3EQKBgBwI
+    k7W6D1f6QER6yjualCyh17EeU2LgvnnFSfaxIpmkJqZ/ok/J4F3hPNzegvJkXkFW
+    XzffKdlVzcJsk5vpmEcAonIY/gkZfVeHC9QjQUEBoSJOTQVaOTImEChX2LL/XNcC
+    3tF1WvNDqv9PMyH/oZSq6CsIAZuO+NaEjcU6pnvBAoGBAL9+eh0ca1RkfChGv6Bq
+    pFhm5tKjZJ6H0BIj0ZNS+0vW5IeRb5uYhfp9fLvGTTWoI/YwaieFmPQBiO0VqVfL
+    ocPdTSLcCLgL5R80OYoDEnh3dXKR1tFXxRPxyRgXkB/RVZODbmCwHL5x04qA3Xnt
+    iXH6wgAb02O2zc422GQqfHE6
+    -----END PRIVATE KEY-----
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: deployment5-ca
+  namespace: debugging
+type: Opaque
+stringData:
+  ca-certificates.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIDJzCCAg+gAwIBAgIUfC7rJoZOmFXJ0d48VhV0MITDlWgwDQYJKoZIhvcNAQEL
+    BQAwGzEZMBcGA1UEAwwQZGVidWdnaW5nLWxhYi1jYTAeFw0yNjA0MTEwMzUwMDda
+    Fw0zNjA0MDgwMzUwMDdaMBsxGTAXBgNVBAMMEGRlYnVnZ2luZy1sYWItY2EwggEi
+    MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDNIE/OMDTXtEdkstTppfzRWK1c
+    kuE9/RnRiHui7ErlHRre3l+0esXTRcTuW2VEBfWHD28UBrvDrPMUaF2Ciiz0PMqT
+    zRF5161fARIA1Z2O362lNL3pt3HkWu8NLnvhOwpnqeK7JU5xEm3YCIOkAgUXDssF
+    ZEIT4711JSSZ0/uWsUl1FZ3HWeyxy76Elf4Wf3HAHLLhJxc65n+8JCCC0wCVVWnz
+    tkx4Q1Lf2SilMER1tBg6oSkfr3jVC1xbPBSZkx777CyXTlFNxt0LvrE9BWeTbZ1+
+    PAamMAbf7xniUDTeeEubZ34H9XQyiEJUkhyn4cBMcvq06y+C20kWYA+HT6y/AgMB
+    AAGjYzBhMB0GA1UdDgQWBBS2+Kx0FTycN9kVBF536VsiGCPNhzAfBgNVHSMEGDAW
+    gBS2+Kx0FTycN9kVBF536VsiGCPNhzAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB
+    /wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAQEASAyPXac44NXwaR+Oea6hrx0gBvZL
+    Fn5J8BIfsBNYWrbh7A9i94t4cb/sWc6nOC9R8p7UI/1TA5T9si6/zf5oRsZzoiL8
+    8mbQJ7bijPFQ44vf/2Z6OWVba64Va2KlTgLuXrJnqHGzvpvWUTP9OYDb4RP6umdW
+    dPSGNjt9DBZNnyTsJ6nsHFyj0bPk3pVam1mN2EeNpJJH96sNQt3XQgkNojRvup7P
+    iOAhmpRdeAdn6/o5ZgjnwGpdQu+dDAsuUcz2BzEaK7Fyn0S9iLyksR+0Uychoasg
+    eaidMvZtwFDwZq8V1Kv4JkDVMOsTG+IxBaMVTzNQ3hlPjRLpgFRlcyafwQ==
+    -----END CERTIFICATE-----
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: service5
+  namespace: debugging
+  labels:
+    app: service5
+spec:
+  containers:
+    - name: app
+      image: python:3.11-slim
+      command:
+        - python
+        - -c
+        - |
+          import http.server
+          import ssl
+
+          class Handler(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.end_headers()
+                  self.wfile.write(b"ok\n")
+
+          httpd = http.server.ThreadingHTTPServer(("0.0.0.0", 8443), Handler)
+          context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+          context.load_cert_chain("/tls/tls.crt", "/tls/tls.key")
+          httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+          httpd.serve_forever()
+      ports:
+        - containerPort: 8443
+      volumeMounts:
+        - name: tls
+          mountPath: /tls
+          readOnly: true
+  volumes:
+    - name: tls
+      secret:
+        secretName: service5-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service5
+  namespace: debugging
+spec:
+  selector:
+    app: service5
+  ports:
+    - port: 443
+      targetPort: 8443
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment5
+  namespace: debugging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deployment5
+  template:
+    metadata:
+      labels:
+        app: deployment5
+    spec:
+      initContainers:
+        - name: wait
+          image: python:3.11-slim
+          command:
+            - python
+            - -c
+            - |
+              import time
+              time.sleep(15)
+      containers:
+        - name: app
+          image: python:3.11-slim
+          command:
+            - python
+            - -c
+            - |
+              import time
+              import urllib.request
+
+              with urllib.request.urlopen(
+                  "https://service5.debugging.svc.cluster.local",
+                  timeout=5,
+              ) as response:
+                  response.read()
+
+              while True:
+                  time.sleep(300)

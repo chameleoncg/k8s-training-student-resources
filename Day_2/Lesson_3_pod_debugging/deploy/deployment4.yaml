@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment4
+  namespace: debugging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deployment4
+  template:
+    metadata:
+      labels:
+        app: deployment4
+    spec:
+      volumes:
+        - name: hide-etc
+          emptyDir: {}
+      containers:
+        - name: app
+          image: debugging/distroless-python:1.0.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: hide-etc
+              mountPath: /etc

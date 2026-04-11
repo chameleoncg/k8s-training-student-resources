@@ -1,0 +1,27 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-guard-for-policy-target
+  annotations:
+    pod-policies.kyverno.io/autogen-controllers: none
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: require-guard-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.labels.training || '' }}"
+            operator: Equals
+            value: policy-target
+      validate:
+        message: "guard: training is required"
+        pattern:
+          metadata:
+            labels:
+              guard: training

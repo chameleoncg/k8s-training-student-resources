@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment1
+  namespace: debugging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deployment1
+  template:
+    metadata:
+      labels:
+        app: deployment1
+    spec:
+      containers:
+        - name: pause
+          image: registry.kBs.io/pause:3.9

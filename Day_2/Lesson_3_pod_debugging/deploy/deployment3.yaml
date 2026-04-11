@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment3
+  namespace: debugging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deployment3
+  template:
+    metadata:
+      labels:
+        app: deployment3
+        training: policy-target
+    spec:
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.9

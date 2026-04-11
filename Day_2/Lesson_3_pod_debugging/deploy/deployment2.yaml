@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment2
+  namespace: debugging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deployment2
+  template:
+    metadata:
+      labels:
+        app: deployment2
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/acme-training/private-debug-app:1.0.0
