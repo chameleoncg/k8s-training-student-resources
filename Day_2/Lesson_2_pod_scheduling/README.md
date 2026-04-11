@@ -34,7 +34,11 @@ kubectl apply -f manifests/contested-scheduling.yaml
 
 ## Challenge
 
-The goal is to uncomment the new "hpc" deployment, and convince the scheduler the following:
+The goal is to apply the new "hpc" deployment, and convince the scheduler the following:
 
 * To run on the HPC labelled node
 * To evict the existing workloads from the node
+
+```bash
+kubectl apply -f manifests/hpc-api.yaml
+```

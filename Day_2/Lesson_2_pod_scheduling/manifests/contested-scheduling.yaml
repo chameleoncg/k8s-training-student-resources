@@ -19,26 +19,3 @@ spec:
         image: hashicorp/http-echo:1.0.0
         args:
           - "-listen=:8080"
-# ---
-# apiVersion: apps/v1
-# kind: Deployment
-# metadata:
-#   name: hpc-api
-#   namespace: default
-# spec:
-#   replicas: 1
-#   selector:
-#     matchLabels:
-#       app: hpc-api
-#   template:
-#     metadata:
-#       labels:
-#         app: hpc-api
-#     spec:
-#       nodeSelector:
-#         training/hpc: "true"
-#       containers:
-#       - name: hpc-api
-#         image: hashicorp/http-echo:1.0.0
-#         args:
-#           - "-listen=:8080"
