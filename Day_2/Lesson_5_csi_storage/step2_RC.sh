@@ -8,57 +8,61 @@ NS="default"
 PVC_NAME="rook-ceph-verify-pvc"
 POD_NAME="rook-ceph-verify-writer"
 
+# Pinned to avoid master/version drift
+ROOK_SC_URL="https://raw.githubusercontent.com/rook/rook/release-1.13/deploy/examples/csi/rbd/storageclass-test.yaml"
+CSIDRIVER_NAME="rook-ceph.rbd.csi.ceph.com"
+EXPECTED_PROVISIONER="rook-ceph.rbd.csi.ceph.com"
+
 echo "--- [Script2] Rook-Ceph Verification ---"
 
-# 0) Discover a Rook RBD StorageClass (don’t assume its name)
+# 0) Ensure StorageClass exists (auto-install if missing)
 echo "--- 0. Detecting Rook RBD StorageClass ---"
-SC_DEFAULT="$(
-  kubectl --context "$KIND_CONTEXT" get storageclass -o jsonpath='{range .items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true
-)"
-
 SC_BY_PROVISIONER="$(
-  kubectl --context "$KIND_CONTEXT" get storageclass \
-    -o jsonpath='{range .items[?(@.provisioner=="rook-ceph.rbd.csi.ceph.com")]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true
+  kubectl --context "$KIND_CONTEXT" get storageclass -o jsonpath='{range .items[?(@.provisioner=="'"$EXPECTED_PROVISIONER"'")]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true
 )"
 
-RC_SC=""
-
-if [ -n "${SC_DEFAULT}" ]; then
-  # confirm it’s the expected provisioner; otherwise fall back
-  if kubectl --context "$KIND_CONTEXT" get sc "${SC_DEFAULT%%$'\n'*}" -o jsonpath='{.provisioner}' 2>/dev/null | grep -q '^rook-ceph\.rbd\.csi\.ceph\.com$'; then
-    RC_SC="${SC_DEFAULT%%$'\n'*}"
-  fi
+if [ -z "$SC_BY_PROVISIONER" ]; then
+  echo "Rook RBD StorageClass missing. Applying it now..."
+  kubectl --context "$KIND_CONTEXT" apply -f "$ROOK_SC_URL"
+  sleep 2
+  SC_BY_PROVISIONER="$(
+    kubectl --context "$KIND_CONTEXT" get storageclass -o jsonpath='{range .items[?(@.provisioner=="'"$EXPECTED_PROVISIONER"'")]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true
+  )"
 fi
 
-if [ -z "$RC_SC" ] && [ -n "$SC_BY_PROVISIONER" ]; then
-  RC_SC="${SC_BY_PROVISIONER%%$'\n'*}"
-fi
+RC_SC="$(echo "$SC_BY_PROVISIONER" | head -n 1 | tr -d '\r')"
 
 if [ -z "$RC_SC" ]; then
-  echo "ERROR: Could not find a StorageClass for provisioner rook-ceph.rbd.csi.ceph.com."
-  echo "Existing StorageClasses:"
+  echo "ERROR: Still could not find a StorageClass with provisioner $EXPECTED_PROVISIONER."
+  echo "Current StorageClasses:"
   kubectl --context "$KIND_CONTEXT" get storageclass || true
-  echo
-  echo "Fix: ensure Script1 successfully applied ${ROOK_URL}/csi/rbd/storageclass-test.yaml"
   exit 1
 fi
 
 echo "Using StorageClass: $RC_SC"
 
-# 1) Clean up any leftover resources from previous attempts (safe)
-kubectl --context "$KIND_CONTEXT" -n "$NS" delete pod "$POD_NAME" --ignore-not-found
-kubectl --context "$KIND_CONTEXT" -n "$NS" delete pvc "$PVC_NAME" --ignore-not-found
+# 1) Wait for CSI driver registration (otherwise PVC will stay Pending forever)
+echo "--- 1. Waiting for CSIDriver registration: $CSIDRIVER_NAME ---"
+until kubectl --context "$KIND_CONTEXT" get csidriver "$CSIDRIVER_NAME" >/dev/null 2>&1; do
+  echo "Waiting..."
+  sleep 3
+done
+echo "CSIDriver is registered."
 
-# 2) Create PVC + Pod that mounts it
-echo "--- 1. Creating PVC and Verification Pod ---"
+# 2) Cleanup old resources (safe)
+kubectl --context "$KIND_CONTEXT" -n "$NS" delete pod "$POD_NAME" --ignore-not-found >/dev/null 2>&1 || true
+kubectl --context "$KIND_CONTEXT" -n "$NS" delete pvc "$PVC_NAME" --ignore-not-found >/dev/null 2>&1 || true
+
+# 3) Create PVC + verification Pod
+echo "--- 2. Creating PVC and Verification Pod ---"
 cat <<YAML | kubectl --context "$KIND_CONTEXT" -n "$NS" apply -f -
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: ${PVC_NAME}
+  name: $PVC_NAME
 spec:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: ${RC_SC}
+  storageClassName: $RC_SC
   resources:
     requests:
       storage: 1Gi
@@ -66,7 +70,7 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: ${POD_NAME}
+  name: $POD_NAME
 spec:
   restartPolicy: Never
   containers:
@@ -82,25 +86,25 @@ spec:
   volumes:
   - name: ceph-vol
     persistentVolumeClaim:
-      claimName: ${PVC_NAME}
+      claimName: $PVC_NAME
 YAML
 
-# 3) Wait for PVC to be Bound (real gate)
-echo "--- 2. Waiting for PVC to be Bound ---"
+# 4) Wait for PVC Bound
+echo "--- 3. Waiting for PVC to be Bound ---"
 kubectl --context "$KIND_CONTEXT" -n "$NS" wait --for=condition=Bound pvc/"$PVC_NAME" --timeout=10m || {
-  echo "ERROR: PVC did not bind. Dumping diagnostics..."
+  echo "ERROR: PVC did not bind. Diagnostics:"
   kubectl --context "$KIND_CONTEXT" -n "$NS" describe pvc/"$PVC_NAME" || true
   kubectl --context "$KIND_CONTEXT" -n rook-ceph get pods || true
   kubectl --context "$KIND_CONTEXT" get csidriver || true
   exit 1
 }
 
-# 4) Wait for Pod Ready
-echo "--- 3. Waiting for Pod Ready ---"
+# 5) Wait for Pod Ready
+echo "--- 4. Waiting for Pod Ready ---"
 kubectl --context "$KIND_CONTEXT" -n "$NS" wait --for=condition=Ready pod/"$POD_NAME" --timeout=5m
 
-# 5) Verify readback
-echo "--- 4. Verifying data integrity ---"
+# 6) Verify readback
+echo "--- 5. Verifying data integrity ---"
 FILE_CONTENT="$(
   kubectl --context "$KIND_CONTEXT" -n "$NS" exec "$POD_NAME" -- cat /data/verify.txt
 )"
