@@ -3,33 +3,36 @@ set -euo pipefail
 
 CLUSTER_NAME="rook-ceph-lab"
 KIND_CONTEXT="kind-${CLUSTER_NAME}"
-
 ROOK_NS="rook-ceph"
-NS="default"
-PVC_NAME="rook-ceph-verify-pvc"
-POD_NAME="rook-ceph-verify-writer"
 
+NS="default"
 CSIDRIVER_NAME="rook-ceph.rbd.csi.ceph.com"
 EXPECTED_PROVISIONER="rook-ceph.rbd.csi.ceph.com"
 
-echo "--- [Script2] Rook-Ceph Verification ---"
+SUFFIX="$(date +%s)"
+PVC_NAME="rook-ceph-verify-pvc-${SUFFIX}"
+POD_NAME="rook-ceph-verify-writer-${SUFFIX}"
+POD_NAMESPACE="${NS}"
 
-echo "--- 0. Confirm CSIDriver exists (bounded) ---"
+echo "--- [Script2] Rook-Ceph Verification (unique per run) ---"
+
+echo "--- 0. Wait for CSIDriver registration (bounded) ---"
 timeout_seconds=300
 start_ts=$(date +%s)
+
 until kubectl --context "$KIND_CONTEXT" get csidriver "$CSIDRIVER_NAME" >/dev/null 2>&1; do
   now_ts=$(date +%s)
   elapsed=$(( now_ts - start_ts ))
   if [ "$elapsed" -ge "$timeout_seconds" ]; then
-    echo "ERROR: CSIDriver not registered: $CSIDRIVER_NAME"
+    echo "ERROR: Timed out waiting for CSIDriver: $CSIDRIVER_NAME"
     kubectl --context "$KIND_CONTEXT" get csidriver || true
-    kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" describe cephcluster my-cluster | tail -n 80 || true
+    kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get cephcluster -A || true
     exit 1
   fi
-  echo "Waiting for CSIDriver $CSIDRIVER_NAME ..."
+  echo "Waiting for CSIDriver..."
   sleep 5
 done
-echo "CSIDriver is present."
+echo "CSIDriver present."
 
 echo "--- 1. Discover StorageClass by provisioner ---"
 RC_SC="$(
@@ -43,14 +46,12 @@ if [ -z "$RC_SC" ]; then
   kubectl --context "$KIND_CONTEXT" get storageclass || true
   exit 1
 fi
-
 echo "Using StorageClass: $RC_SC"
 
-echo "--- 2. Cleanup old resources (safe) ---"
+echo "--- 2. Create PVC + verification Pod ---"
 kubectl --context "$KIND_CONTEXT" -n "$NS" delete pod "$POD_NAME" --ignore-not-found >/dev/null 2>&1 || true
 kubectl --context "$KIND_CONTEXT" -n "$NS" delete pvc "$PVC_NAME" --ignore-not-found >/dev/null 2>&1 || true
 
-echo "--- 3. Create PVC + verification Pod ---"
 kubectl --context "$KIND_CONTEXT" -n "$NS" apply -f - <<YAML
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -85,23 +86,24 @@ spec:
       claimName: ${PVC_NAME}
 YAML
 
-echo "--- 4. Wait for PVC Bound ---"
-kubectl --context "$KIND_CONTEXT" -n "$NS" wait --for=condition=Bound pvc/"$PVC_NAME" --timeout=10m || {
+echo "--- 3. Wait for PVC Bound (bounded) ---"
+if ! kubectl --context "$KIND_CONTEXT" -n "$NS" wait --for=condition=Bound pvc/"$PVC_NAME" --timeout=10m; then
   echo "ERROR: PVC did not bind. Diagnostics:"
   kubectl --context "$KIND_CONTEXT" -n "$NS" describe pvc/"$PVC_NAME" || true
-  kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get pods -o wide || true
-  kubectl --context "$KIND_CONTEXT" get csidriver || true
-  exit 1
-}
+  echo "--- Related PVs (if any) ---"
+  kubectl --context "$KIND_CONTEXT" get pv || true
+  echo "--- Events near the claim ---"
+  kubectl --context "$KIND_CONTEXT" -n "$NS" get events --sort-by=.metadata.creationTimestamp | tail -n 80 || true
 
-echo "--- 5. Wait for Pod Ready ---"
-kubectl --context "$KIND_CONTEXT" -n "$NS" wait --for=condition=Ready pod/"$POD_NAME" --timeout=5m || {
-  echo "ERROR: Pod not Ready. Diagnostics:"
-  kubectl --context "$KIND_CONTEXT" -n "$NS" describe pod/"$POD_NAME" || true
+  echo "--- Cleanup (delete PVC to avoid stale Volume IDs) ---"
+  kubectl --context "$KIND_CONTEXT" -n "$NS" delete pvc "$PVC_NAME" --ignore-not-found || true
   exit 1
-}
+fi
 
-echo "--- 6. Verify file write/read ---"
+echo "--- 4. Wait for Pod Ready ---"
+kubectl --context "$KIND_CONTEXT" -n "$NS" wait --for=condition=Ready pod/"$POD_NAME" --timeout=5m
+
+echo "--- 5. Read evidence file back ---"
 FILE_CONTENT="$(
   kubectl --context "$KIND_CONTEXT" -n "$NS" exec "$POD_NAME" -- cat /data/verify.txt
 )"

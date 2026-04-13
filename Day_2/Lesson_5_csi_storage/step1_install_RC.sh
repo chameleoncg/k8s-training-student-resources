@@ -53,7 +53,6 @@ ROOK_URL="https://raw.githubusercontent.com/rook/rook/release-1.13/deploy/exampl
 kubectl --context "$KIND_CONTEXT" apply -f "${ROOK_URL}/common.yaml"
 kubectl --context "$KIND_CONTEXT" apply -f "${ROOK_URL}/crds.yaml"
 kubectl --context "$KIND_CONTEXT" apply -f "${ROOK_URL}/operator.yaml"
-kubectl --context "$KIND_CONTEXT" apply -f "${ROOK_URL}/csi-operator.yaml"
 
 echo "Waiting for rook-ceph-operator..."
 kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" rollout status deployment/rook-ceph-operator --timeout=600s
