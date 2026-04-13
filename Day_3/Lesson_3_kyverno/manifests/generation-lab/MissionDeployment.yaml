@@ -1,0 +1,63 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:mission-deployment-policy
+  labels:
+    app.kubernetes.io/component: background-controller
+    app.kubernetes.io/instance: kyverno
+    app.kubernetes.io/part-of: kyverno
+    rbac.kyverno.io/aggregate-to-background-controller: "true"
+rules:
+  - apiGroups: 
+      - clarity.io
+    resources: 
+      - missiondeployments
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources: 
+      - services
+      - pods
+      - configmaps
+    verbs: 
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - delete
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+    name: missiondeployments.clarity.io # name must match the spec fields: <plural>.<group>
+spec:
+    group: clarity.io  # group name to use for REST mapping: /apis/<group>/<version>
+    names:
+       kind: MissionDeployment  # kind is the camelcased value used in your YAML manifest
+       plural: missiondeployments  # plural name to be used in the URL: /apis/<group>/<version>/<plural>
+       singular: missiondeployment  # singular name to be used as an alias on the CLI
+       shortNames:  # shortNames allow shorter string to shout the resource on the CLI
+          - md
+    scope: Namespaced  # scope can be Namespaced or Cluster
+    versions:  # list of versions supported by this CRD
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:  # Schema validation for v1
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                ip:
+                  type: string
+                  pattern: '^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$'
+                action:
+                  type: string
+                  enum: ["probe", "scan"]

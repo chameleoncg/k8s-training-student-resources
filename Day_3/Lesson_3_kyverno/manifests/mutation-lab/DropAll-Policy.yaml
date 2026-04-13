@@ -1,0 +1,29 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: add-capabilities-drop-all
+  annotations:
+    policies.kyverno.io/title: "Add Drop All Capabilities"
+    policies.kyverno.io/description: >-
+      Ensures all containers drop all capabilities by default.
+spec:
+  rules:
+    - name: drop-all-caps
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+            namespaces:
+              - default
+      mutate:
+        foreach:
+        - list: "request.object.spec.containers"
+          patchStrategicMerge:
+            spec:
+              containers:
+              - name: "{{ element.name }}"
+                securityContext:
+                  capabilities:
+                    drop:
+                      - ALL
