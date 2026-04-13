@@ -43,8 +43,7 @@ You must restrict the permissions of your downloaded private key file. You can d
 4. Click **Disable inheritance**. Choose the option to **Remove all inherited permissions from this object**.
 5. Click **Add**, then click **Select a principal**.
 6. Type your exact Windows username (*not* the VM Default Username from your email) into the box, click **Check Names**, and then click **OK**.
-    > [!TIP]
-    > If you aren't sure of your exact Windows username, open Task Manager (Ctrl+Shift+Esc), navigate to the "Users" tab, and look at the account name listed there. Enter only that exact username; do not include your domain or email address.
+    * If you aren't sure of your exact Windows username, open Task Manager (Ctrl+Shift+Esc), navigate to the "Users" tab, and look at the account name listed there. Enter only that exact username; do not include your domain or email address.
 7. In the permissions window, check the box for **Read** and click **OK**.
 8. Click **OK** on all remaining windows to apply the settings.
 
