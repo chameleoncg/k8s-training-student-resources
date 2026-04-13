@@ -1,0 +1,39 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: add-default-seccomp
+  annotations:
+    policies.kyverno.io/description: "Sets the default seccomp profile to RuntimeDefault."
+spec:
+  rules:
+    - name: add-POD-seccomp-profile
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+            namespaces:
+            - default
+      mutate:
+        patchStrategicMerge:
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+    - name: add-container-seccomp-profile
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+            namespaces:
+            - default
+      mutate:
+          foreach:
+          - list: "request.object.spec.containers"
+            patchStrategicMerge:
+              spec:
+                containers:
+                - name: "{{ element.name }}"
+                  securityContext:
+                    seccompProfile:
+                      type: RuntimeDefault

@@ -1,0 +1,28 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: add-default-securitycontext
+  annotations:
+    policies.kyverno.io/title: Add Default securityContext
+    policies.kyverno.io/description: >-
+      Mutates Pods to set runAsNonRoot, runAsUser, runAsGroup, and fsGroup 
+      if they are not already set.
+spec:
+  rules:
+  - name: add-securitycontext
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaces:
+          - default
+    mutate:
+      patchStrategicMerge:
+        spec:
+          # Sets security context at the Pod level
+          securityContext:
+            +(runAsNonRoot): true
+            +(runAsUser): 1000
+            +(runAsGroup): 1000
+            +(fsGroup): 1000

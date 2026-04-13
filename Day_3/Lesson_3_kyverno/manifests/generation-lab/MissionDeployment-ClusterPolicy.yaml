@@ -1,0 +1,124 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:mission-deployment-policy
+  labels:
+    app.kubernetes.io/component: background-controller
+    app.kubernetes.io/instance: kyverno
+    app.kubernetes.io/part-of: kyverno
+    rbac.kyverno.io/aggregate-to-background-controller: "true"
+rules:
+  - apiGroups: 
+      - clarity.io
+    resources: 
+      - missiondeployments
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources: 
+      - services
+      - pods
+      - configmaps
+    verbs: 
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - delete
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: create-mission-deployments
+  annotations:
+    policies.kyverno.io/title: create-mission-deployments
+    policies.kyverno.io/category: Lab
+    policies.kyverno.io/minversion: 1.6.0
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: MissionDeployment
+    policies.kyverno.io/description: Creates and manages pods off MissionDeployment CRDs
+spec:
+  admission: true
+  background: true
+  generateExisting: true
+  rules:
+    - name: create-mission-deployment-config
+      match:
+        any:
+          - resources:
+              kinds:
+                - MissionDeployment
+      generate:
+        apiVersion: v1
+        kind: ConfigMap
+        name: "{{ request.object.metadata.name }}-caddy-html-config"
+        namespace: "{{ request.object.metadata.namespace }}"
+        synchronize: true
+        data:
+          metadata:
+            app: "{{ request.object.metadata.name }}"
+          data:
+            index.html: |
+              <!DOCTYPE html>
+              <html>
+              <body>
+                <h1>Action: {{ request.object.spec.action }}</h1>
+                <h1>Target: {{ request.object.spec.ip }}</h1>
+              </body>
+              </html>
+    - name: create-mission-deployment-service
+      match:
+        any:
+          - resources:
+              kinds:
+                - MissionDeployment
+      generate:
+        apiVersion: v1
+        kind: Service
+        name: "{{ request.object.metadata.name }}-service"
+        namespace: "{{ request.object.metadata.namespace }}"
+        synchronize: true
+        data:
+          spec:
+            type: NodePort
+            selector:
+              app: "{{ request.object.metadata.name }}"
+            ports:
+              - protocol: TCP
+                port: 80
+                targetPort: 80
+                nodePort: 30080
+    - name: create-mission-deployment-pod
+      match:
+        any:
+          - resources:
+              kinds:
+                - MissionDeployment
+      generate:
+        apiVersion: v1
+        kind: Pod
+        name: "{{ request.object.metadata.name }}"
+        namespace: "{{ request.object.metadata.namespace }}"
+        synchronize: true
+        data:
+          metadata:
+            labels:
+              app: "{{ request.object.metadata.name }}"
+          spec:
+            containers:
+              - name: caddy
+                image: caddy:alpine
+                ports:
+                  - containerPort: 80
+                volumeMounts:
+                  - name: html-volume
+                    mountPath: /usr/share/caddy # Caddy's default web root
+            volumes:
+            - name: html-volume
+              configMap:
+                name: "{{ request.object.metadata.name }}-caddy-html-config"

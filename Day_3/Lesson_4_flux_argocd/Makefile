@@ -1,2 +1,13 @@
-setup:
-	flux install 
+setup: setup-cluster setup-flux
+	@ git pull
+
+setup-cluster:
+	@ registry_up
+	@ kind_up
+
+setup-kyverno: setup-cluster
+	@ flux install
+
+teardown:
+	kind_down
+	registry_down

@@ -21,6 +21,6 @@ spec:
  sourceRef:
    kind: GitRepository
    name: git-example
- path: "./k8s-training-student-resources\Day_3\Lesson_4_flux_argocd\manifests\git-kustomization-example"
+ path: "./k8s-training-student-resources/Day_3/Lesson_4_flux_argocd/manifests/git-kustomization"
  prune: true
  timeout: 1m

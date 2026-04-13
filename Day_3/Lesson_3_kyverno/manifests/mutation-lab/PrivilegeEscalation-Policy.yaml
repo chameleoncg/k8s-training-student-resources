@@ -1,0 +1,23 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: mutate-disallow-privilege-escalation
+spec:
+  rules:
+  - name: set-privilege-escalation-false
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaces:
+          - default
+    mutate:
+      foreach:
+      - list: "request.object.spec.containers"
+        patchStrategicMerge:
+          spec:
+            containers:
+            - name: "{{ element.name }}"
+              securityContext:
+                allowPrivilegeEscalation: false
