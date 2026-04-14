@@ -13,7 +13,7 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
- name: git-example
+ name: gitops-reconcile
  namespace: default
 spec:
  interval: 10m
