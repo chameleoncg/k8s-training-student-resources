@@ -24,7 +24,8 @@ curl -s http://localhost:8001/api/v1/namespaces/kube-system/pods/kube-apiserver/
 
 ## LAB 2 - Birds and Bees: How k8s Resources Are Born
 1. Run `make setup`
-2. Apply the MissionDeployment CRD to the cluster with ```shell
+2. Apply the MissionDeployment CRD to the cluster with 
+```shell
 kubectl apply -f manifests/MissionDeployment.yaml
 ```
 3. Apply a MissionDeployment instance to the cluster with 
