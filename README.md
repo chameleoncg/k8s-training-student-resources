@@ -40,3 +40,7 @@ We aim to keep this structure flexible and will adapt it as needed to accommodat
 To get started, simply clone this repository and explore the available resources.
 
 We hope this repository will be a valuable asset for your academic journey!
+
+## Rights
+
+This training material is Clarity proprietary. Any unauthorized use, copying, disclosure or dissemination of this material is prohibited. If you are not the intended recipient, please notify the sender immediately and delete all copies of the training materials.
