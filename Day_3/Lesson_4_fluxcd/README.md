@@ -108,4 +108,8 @@ spec:
 ## Flux Gitops Lab
 We are going to put the last two labs together in a simple gitops example.
 1. Run `make setup-flux` to install flux into your cluster.
-2. Now lets bootstrap the gitops example into our cluster. `kubectl apply -f kubectl apply -f manifests/gitops-example/gotk-sync.yaml`
+2. Now lets bootstrap our simple gitops. `kubectl apply -f kubectl apply -f manifests/gitops-example/gotk-sync.yaml`
+4. Go ahead and run `kubectl get hr` and `kubectl get ks`. Our previous labs are deployed! How did that happen? Lets look at the gotk-sync.yaml
+```yaml
+
+```
