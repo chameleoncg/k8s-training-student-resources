@@ -12,12 +12,17 @@ sudo apt -f install -y || true
 
 echo "--- 1. Host deps ---"
 sudo apt update
-sudo apt install -y docker.io lvm2 thin-provisioning-tools linux-modules-extra-$(uname -r)
+sudo apt install -y docker.io lvm2 thin-provisioning-tools linux-modules-extra-$(uname -r) util-linux udev >/dev/null
 sudo systemctl enable --now docker
 sudo usermod -aG docker "$USER" || true
 
+echo "--- 1.0 Ensure kernel modules likely needed are present/loaded (best effort) ---"
+# rbd + nbd are the typical needs for this lab setup.
+# (If modprobe fails, we keep going; script will still diagnose CSI/node issues later.)
+sudo modprobe nbd max_part=8 || true
+sudo modprobe rbd || true
+
 echo "--- 1.1 Install util-linux (for losetup/loop mgmt) ---"
-sudo apt-get update -y >/dev/null 2>&1 || true
 sudo apt-get install -y util-linux >/dev/null 2>&1 || true
 
 echo "--- 1.2 Create a dedicated, zero-filled loop device for OSDs ---"
@@ -27,7 +32,7 @@ LOOP_SIZE="20G"
 sudo rm -f "$LOOP_IMG" || true
 sudo losetup -D || true
 
-# Fully zero-fill to avoid bluestore label garbage
+echo "--- 1.3 Zero-fill loop image (avoid bluestore label garbage) ---"
 sudo dd if=/dev/zero of="$LOOP_IMG" bs=1M count=20480 conv=fsync status=progress
 
 sudo losetup -fP "$LOOP_IMG"
@@ -36,6 +41,11 @@ LOOP_DEV_NAME="$(sudo losetup -j "$LOOP_IMG" | awk -F: '{print $1}' | head -n1)"
 LOOP_KNAME="$(basename "$LOOP_DEV_NAME")"
 
 echo "Created loop device: $LOOP_DEV_NAME (kname=$LOOP_KNAME)"
+
+echo "--- 1.4 udev settle/trigger ---"
+sudo udevadm settle || true
+sudo udevadm trigger --action=add || true
+sudo udevadm settle || true
 
 echo "--- 2. Install kind & kubectl ---"
 if ! command -v kind &>/dev/null; then
@@ -59,6 +69,10 @@ nodes:
   extraMounts:
   - hostPath: /dev
     containerPath: /dev
+  - hostPath: /sys
+    containerPath: /sys
+  - hostPath: /run/udev
+    containerPath: /run/udev
 EOF
 
 kind create cluster --name "$CLUSTER_NAME" --config kind-config.yaml --wait 0s
@@ -127,16 +141,40 @@ allowVolumeExpansion: true
 reclaimPolicy: Delete
 YAML
 
-echo "--- 8. Wait for CephBlockPool replicapool to be Ready (true functional gate) ---"
-until kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get cephblockpool replicapool -o jsonpath='{.status.phase}' 2>/dev/null | grep -q '^Ready$'; do
+echo "--- 8. Wait for CephBlockPool replicapool to be Ready (timeout + diagnostics) ---"
+ROOK_TIMEOUT_SEC=900
+deadline=$((SECONDS+ROOK_TIMEOUT_SEC))
+
+while true; do
+  phase="$(kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get cephblockpool replicapool -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+  if [ "$phase" = "Ready" ]; then
+    echo "replicapool Ready"
+    break
+  fi
+
+  if [ $SECONDS -gt $deadline ]; then
+    echo "ERROR: timed out waiting for replicapool Ready (last phase: ${phase:-<none>}). Dumping diagnostics..."
+    kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get cephcluster "$CEPH_CLUSTER_NAME" -o wide || true
+    kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" describe cephblockpool replicapool || true
+    kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get pods -o wide || true
+    kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" logs deploy/rook-ceph-operator --tail=250 || true
+    kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get jobs || true
+    kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get pods -l app=rook-ceph-osd -o wide || true
+    # dump latest OSD prepare job logs if any jobs exist
+    osdjob="$(kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get jobs -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null | grep 'rook-ceph-osd-prepare' | head -n1 || true)"
+    if [ -n "${osdjob}" ]; then
+      kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" logs "job/${osdjob}" --tail=300 || true
+    fi
+    exit 1
+  fi
+
   echo -n "."
   sleep 5
 done
-echo ""
 
 echo "--------------------------------------------------------"
 echo "ROOK-CEPH INSTALLATION COMPLETE"
 echo "Cluster: $CLUSTER_NAME"
 echo "Context: $KIND_CONTEXT"
-kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get cephblockpool replicapool
+kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get cephblockpool replicapool -o wide
 echo "--------------------------------------------------------"
