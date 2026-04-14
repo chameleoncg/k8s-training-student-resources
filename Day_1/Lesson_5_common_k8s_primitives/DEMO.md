@@ -144,6 +144,12 @@ Look for:
 
 ---
 
+## Challenge (see answer below):
+
+Can you update the `APP_COLOR` to `green`?
+
+---
+
 ## Cleanup
 
 ```sh
@@ -178,3 +184,12 @@ kubectl delete -f manifests/deployment-healing.yaml
 - **Deployment** manages desired state and self-healing behavior.
 - **Service** decouples Pod lifecycle from network access.
 - **ConfigMap/Secret injection** separates config from container images for portability and security.
+
+---
+
+## Challenge Answer:
+
+1. Edit the ConfigMap: `kubectl edit configmap app-config`
+2. Modify the `APP_COLOR` value from `blue` to `green`; Save and exit your editor.
+3. Restart the Deployment: `kubectl rollout restart deploy config-demo`
+4. Check the logs again: `kubectl logs deploy/config-demo --tail=50`
