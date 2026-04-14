@@ -42,7 +42,7 @@ kubectl apply -f manifests/deployment-healing.yaml
 ```sh
 kubectl get deploy
 kubectl get pods -l app=nginx -o wide
-kuebctl get replicasets.apps
+kubectl get replicasets.apps
 ```
 
 You should see:
