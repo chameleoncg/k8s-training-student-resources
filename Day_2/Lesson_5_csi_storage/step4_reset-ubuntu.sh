@@ -1,205 +1,144 @@
 #!/usr/bin/env bash
-# Full reset of Kubernetes + Rook-Ceph lab artifacts (no-hang version)
-set +euo pipefail
+# Safe reset for kind + rook-ceph lab (NO apt/dpkg purges by default)
+set -euo pipefail
 
 echo "========================================================"
 echo "RESET START - Host: $(hostname) - User: $(whoami) - PID $$"
 echo "========================================================"
 
-# -------------------------
-# Helpers
-# -------------------------
-log() { echo "==> $*"; }
-have() { command -v "$1" >/dev/null 2>&1; }
-
-export DEBIAN_FRONTEND=noninteractive
-
-run_ign() { timeout 10s "$@" >/dev/null 2>&1 || true; }
-run_timeout() {
-  # usage: run_timeout <seconds> <cmd...>
-  local t="$1"; shift
-  timeout "$t" "$@" || true
-}
-
-# Wait for dpkg/apt locks briefly (prevents "silent hangs")
-wait_dpkg() {
-  log "Ensuring dpkg/apt state is not locked..."
-  run_timeout 60 sudo dpkg --configure -a || true
-  run_timeout 30 sudo apt-get update -y || true
-}
-
-# -------------------------
-# 0) Kubernetes Cleanup (Non-blocking)
-# -------------------------
-if have kubectl; then
-  if [ -f "$HOME/.kube/config" ]; then
-    log "Attempting to delete namespace rook-ceph & StorageClasses (best-effort, non-blocking)..."
-    run_timeout 25 kubectl delete ns rook-ceph --wait=false --ignore-not-found=true 2>/dev/null || true
-    run_timeout 25 kubectl delete storageclass rook-ceph-block --ignore-not-found=true 2>/dev/null || true
-    run_timeout 25 kubectl delete storageclass rook-ceph-block-nbd --ignore-not-found=true 2>/dev/null || true
+# ---- sudo handling: never hang on password prompts ----
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then
+  if sudo -n true >/dev/null 2>&1; then
+    SUDO="sudo -n"
+  else
+    echo "ERROR: Need root or passwordless sudo to avoid hanging."
+    echo "Run: sudo $0"
+    exit 1
   fi
 fi
 
-# -------------------------
-# 1) Mount Cleanup (Crucial for Ceph RBD)
-# -------------------------
-log "--- 1. Unmounting stale K8s/CSI mounts (fast timeout) ---"
+# ---- helpers ----
+log() { echo "==> $*"; }
+run_ign() { timeout "${2:-10s}" "$1" "${@:3}" >/dev/null 2>&1 || true; }  # not used much
+cmd_timeout() { local t="$1"; shift; timeout "$t" "$@" || true; }
+have() { command -v "$1" >/dev/null 2>&1; }
 
-# Unmount known roots quickly, using /proc/mounts parsing (avoid long grep->loop work)
-UNMOUNT_ROOTS=(
+# ---- 0) Best-effort stop services (no package purges) ----
+log "--- 0. Stopping docker/containerd (best-effort) ---"
+cmd_timeout 15 $SUDO systemctl stop docker.service docker.socket containerd 2>/dev/null || true
+
+# ---- 1) Unmount stale kubelet/csi/ceph/rbd mounts quickly ----
+log "--- 1. Unmounting stale mounts (best-effort, bounded) ---"
+
+UNMOUNT_MAX=50
+attempts=0
+
+# Prefer unmounting under common roots
+ROOTS=(
   "/var/lib/kubelet"
-  "/var/lib/ceph"
-  "/var/run/ceph"
   "/var/lib/csi"
   "/csi"
+  "/var/lib/rook"
+  "/var/lib/ceph"
+  "/var/run/ceph"
 )
 
-# Collect mountpoints under these roots and try unmounting them with a short timeout.
-# Note: mountpoints change while unmounting; keep it best-effort.
-for root in "${UNMOUNT_ROOTS[@]}"; do
+# Collect mountpoints under roots
+mountpoints="$(
+  awk '{
+    mp=$2
+    # match only if mountpoint begins with one of the roots
+    print mp
+  }' /proc/mounts 2>/dev/null | head -n 1
+)" # placeholder to avoid subshell complexity
+
+# Real collection:
+for root in "${ROOTS[@]}"; do
   if [ -d "$root" ]; then
-    # List mountpoints under root (longest first) and unmount with timeout.
-    mps="$(awk -v r="$root" '$2 ~ "^"r"/?" {print $2}' /proc/mounts 2>/dev/null | sort -r -u)"
-    if [ -n "$mps" ]; then
+    mps="$(awk -v r="$root" '$2 ~ "^"r {print $2}' /proc/mounts 2>/dev/null | sort -r -u || true)"
+    if [ -n "${mps:-}" ]; then
       while IFS= read -r mp; do
         [ -z "$mp" ] && continue
-        log "Unmounting $mp ..."
-        run_timeout 8 sudo umount -f -l "$mp" 2>/dev/null || true
+        attempts=$((attempts+1))
+        [ "$attempts" -gt "$UNMOUNT_MAX" ] && break
+        log "Unmount attempt ($attempts/$UNMOUNT_MAX): $mp"
+        cmd_timeout 8 $SUDO umount -f -l "$mp" || true
       done <<< "$mps"
     fi
   fi
 done
 
-# -------------------------
-# 2) Tear down kind clusters
-# -------------------------
-log "--- 2. Tearing down Kubernetes (kind) ---"
+# ---- 2) Delete rook namespace + any leftover StorageClasses (non-blocking) ----
+if have kubectl && [ -f "$HOME/.kube/config" ]; then
+  log "--- 2. Deleting rook-ceph namespace and StorageClasses (non-blocking) ---"
+  cmd_timeout 25 $SUDO true
+  cmd_timeout 25 kubectl delete ns rook-ceph --wait=false --ignore-not-found=true 2>/dev/null || true
+  cmd_timeout 15 kubectl delete storageclass rook-ceph-block --ignore-not-found=true 2>/dev/null || true
+  cmd_timeout 15 kubectl delete storageclass rook-ceph-block-nbd --ignore-not-found=true 2>/dev/null || true
+fi
+
+# ---- 3) Delete kind clusters ----
+log "--- 3. Tearing down kind clusters (bounded) ---"
 if have kind; then
-  run_timeout 180 kind delete clusters --all >/dev/null 2>&1 || true
-  run_timeout 10 sudo rm -f /usr/local/bin/kind /bin/kind || true
+  cmd_timeout 180 kind delete clusters --all >/dev/null 2>&1 || true
 fi
 
-# -------------------------
-# 3) Remove tooling (kubectl snap etc.)
-# -------------------------
-log "--- 3. Removing tooling ---"
-if have snap; then
-  run_timeout 60 sudo snap remove kubectl 2>/dev/null || true
-fi
-
-run_timeout 10 sudo rm -f /usr/local/bin/kubectl /bin/kubectl /usr/bin/kubectl 2>/dev/null || true
-
-# kubelet/kubeadm/kubectl purge if installed
-wait_dpkg
-run_timeout 120 sudo apt-get purge -y kubelet kubeadm kubectl 2>/dev/null || true
-
-# -------------------------
-# 4) Docker/Containerd cleanup
-# -------------------------
-log "--- 4. Purging Docker/Runtime (timeout-protected, non-interactive) ---"
-wait_dpkg
-
+# ---- 4) Kill any remaining kubelet/csi/ceph-related containers (best-effort) ----
 if have docker; then
-  # Don’t let docker ps hang forever
-  timeout 10s docker ps -aq >/tmp/reset_docker_ids 2>/dev/null || true
-  IDS="$(cat /tmp/reset_docker_ids 2>/dev/null | tr -d '\n' || true)"
-  rm -f /tmp/reset_docker_ids
+  log "--- 4. Docker cleanup (best-effort, bounded) ---"
+  IDS="$(docker ps -aq 2>/dev/null | tr -d '\n' || true)"
   if [ -n "${IDS:-}" ]; then
-    log "Force-killing Docker containers..."
-    # shellcheck disable=SC2086
-    run_timeout 60 sudo docker rm -f $IDS >/dev/null 2>&1 || true
-  fi
-  run_ign sudo systemctl stop docker.service docker.socket containerd 2>/dev/null || true
-fi
-
-# Purge packages (use longer timeout, but still bounded)
-run_timeout 240 sudo apt-get purge -y docker.io containerd.io runc 2>/dev/null || true
-run_timeout 120 sudo apt-get autoremove -y 2>/dev/null || true
-
-# -------------------------
-# 5) Storage & LVM cleanup
-# -------------------------
-log "--- 5. Storage & LVM cleanup ---"
-wait_dpkg
-
-run_timeout 120 sudo apt-get purge -y lvm2 thin-provisioning-tools 2>/dev/null || true
-
-# LVM removal can be slow; only attempt if commands exist, and keep it bounded.
-if command -v lvs >/dev/null 2>&1 && command -v vgs >/dev/null 2>&1; then
-  log "Best-effort removing LVs/VGs (bounded)..."
-
-  # Remove LVs
-  LVPATHS="$(timeout 10s sudo lvs --noheadings -o lv_path 2>/dev/null | awk '{print $1}' | tr '\n' ' ' || true)"
-  if [ -n "${LVPATHS:-}" ]; then
-    run_timeout 120 sudo lvremove -f $LVPATHS >/dev/null 2>&1 || true
-  fi
-
-  # Remove VGs
-  VG_NAMES="$(timeout 10s sudo vgs --noheadings -o vg_name 2>/dev/null | awk '{print $1}' | tr '\n' ' ' || true)"
-  if [ -n "${VG_NAMES:-}" ]; then
-    run_timeout 120 sudo vgremove -f $VG_NAMES >/dev/null 2>&1 || true
-  fi
-
-  # Wipe PV signatures (very best-effort; do not assume devices)
-  if command -v pvs >/dev/null 2>&1; then
-    PV_NAMES="$(timeout 10s sudo pvs --noheadings -o pv_name 2>/dev/null | awk '{print $1}' | tr '\n' ' ' || true)"
-    if [ -n "${PV_NAMES:-}" ]; then
-      log "Best-effort wiping PV signatures..."
-      run_timeout 120 sudo wipefs -a $PV_NAMES >/dev/null 2>&1 || true
-    fi
+    # Try a bounded stop/remove
+    cmd_timeout 90 docker rm -f $IDS >/dev/null 2>&1 || true
   fi
 fi
 
-# -------------------------
-# 6) Deep Filesystem Wipe (bounded per dir)
-# -------------------------
-log "--- 6. Wiping state directories (best-effort, bounded) ---"
+# ---- 5) Clean filesystem state (bounded deletes) ----
+log "--- 5. Removing kubelet/csi/ceph state directories (best-effort, bounded) ---"
+
 DIRS=(
+  "/var/lib/kubelet"
+  "/var/lib/csi"
   "/var/lib/rook"
   "/var/lib/ceph"
   "/etc/ceph"
   "/var/log/ceph"
   "/var/run/ceph"
-  "/var/lib/kubelet"
   "/etc/kubernetes"
-  "/var/lib/cni"
-  "/etc/cni"
-  "/var/lib/docker"
-  "/var/lib/containerd"
-  "/var/lib/kubelet/plugins"
-  "/var/lib/kubelet/pods"
   "$HOME/.kube"
 )
 
 for dir in "${DIRS[@]}"; do
   if [ -e "$dir" ]; then
     log "Removing $dir ..."
-    run_timeout 60 sudo rm -rf "$dir" 2>/dev/null || true
+    cmd_timeout 60 $SUDO rm -rf "$dir" || true
   fi
 done
 
-# -------------------------
-# 7) Networking Reset (lab-only)
-# -------------------------
-log "--- 7. Resetting firewall/iptables (best-effort) ---"
-run_ign sudo iptables -F
-run_ign sudo iptables -t nat -F
-run_ign sudo iptables -t nat -X
-run_ign sudo iptables -P FORWARD ACCEPT
+# ---- 6) Networking reset (lab-only) ----
+log "--- 6. Resetting iptables (best-effort) ---"
+cmd_timeout 10 $SUDO iptables -F || true
+cmd_timeout 10 $SUDO iptables -t nat -F || true
+cmd_timeout 10 $SUDO iptables -t nat -X || true
+cmd_timeout 10 $SUDO iptables -P FORWARD ACCEPT || true
 
-# -------------------------
-# 8) Final APT cleanup
-# -------------------------
-log "--- 8. Final APT cleanup ---"
-run_timeout 60 sudo apt-get clean 2>/dev/null || true
-run_timeout 60 sudo apt-get autoclean -y 2>/dev/null || true
-
-# -------------------------
-# 9) Local Artifact Cleanup (YAML files)
-# -------------------------
-log "--- 9. Cleaning up local YAML manifests (in cwd) ---"
-find . -maxdepth 1 -type f \( -name "*.yaml" -o -name "*.yml" \) -exec rm -v {} + || true
+# ---- 7) Optional: detach known loop device image (best-effort) ----
+# (Does NOT require apt/dpkg.)
+log "--- 7. Loop device cleanup (best-effort) ---"
+LOOP_IMG="/tmp/rook-ceph-loop.img"
+if [ -f "$LOOP_IMG" ]; then
+  # Detach any losetup devices tied to the file (if tool exists)
+  if have losetup; then
+    loops="$(cmd_timeout 5 $SUDO losetup -j "$LOOP_IMG" 2>/dev/null | awk -F: '{print $1}' | head -n 20 || true)"
+    for ld in $loops; do
+      log "Detaching loop device $ld"
+      cmd_timeout 5 $SUDO losetup -d "$ld" || true
+    done
+  fi
+fi
 
 echo "========================================================"
-echo "RESET COMPLETE. Reboot recommended."
+echo "RESET COMPLETE (safe mode: NO apt/dpkg purges)."
+echo "If you still see weird kernel/module behavior, reboot is recommended."
 echo "========================================================"
