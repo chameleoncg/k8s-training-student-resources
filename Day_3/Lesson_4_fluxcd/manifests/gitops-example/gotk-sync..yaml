@@ -2,7 +2,7 @@
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:
- name: git-example
+ name: gitops-example
  namespace: default
 spec:
  interval: 5m
@@ -20,7 +20,7 @@ spec:
  targetNamespace: default
  sourceRef:
    kind: GitRepository
-   name: git-example
+   name: gitops-example
  path: "./Day_3/Lesson_4_fluxcd/manifests"
  prune: true
  timeout: 1m
