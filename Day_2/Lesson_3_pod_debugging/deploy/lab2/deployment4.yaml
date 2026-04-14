@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment6
+  namespace: debugging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deployment6
+  template:
+    metadata:
+      labels:
+        app: deployment6
+    spec:
+      containers:
+        - name: app
+          image: debugging/lab6-python:1.0.0
+          imagePullPolicy: IfNotPresent
