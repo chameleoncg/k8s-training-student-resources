@@ -18,19 +18,25 @@ This demo walks you through the manifests in this lesson and helps you observe:
 ### 1) Create the Pod
 Run:
 
-`kubectl apply -f manifests/basic-pod.yaml`
+```sh
+kubectl apply -f manifests/basic-pod.yaml
+```
 
 ### 2) Confirm it is running
 Run:
 
-`kubectl get pods -o wide`
+```sh
+kubectl get pods -o wide
+```
 
 You should see `basic-nginx` in `Running` status.
 
 ### 3) Inspect Pod details
 Run:
 
-`kubectl describe pod basic-nginx`
+```sh
+kubectl describe pod basic-nginx
+```
 
 Focus on:
 - `Containers` section
@@ -40,14 +46,18 @@ Focus on:
 ### 4) Check logs
 Run:
 
-`kubectl logs basic-nginx`
+```sh
+kubectl logs basic-nginx
+```
 
 For nginx, logs may be minimal until traffic reaches the pod.
 
 ### 5) (Optional) Port-forward and test
 Run:
 
-`kubectl port-forward pod/basic-nginx 8080:80`
+```sh
+kubectl port-forward pod/basic-nginx 8080:80
+```
 
 Then visit `http://localhost:8080` in your browser or use `curl http://localhost:8080` to confirm nginx is serving traffic.
 
@@ -56,7 +66,9 @@ Stop port-forward with `Ctrl+C` when done.
 ### 6) Cleanup basic pod
 Run:
 
-`kubectl delete -f manifests/basic-pod.yaml`
+```sh
+kubectl delete -f manifests/basic-pod.yaml
+```
 
 ---
 
@@ -71,12 +83,16 @@ This manifest demonstrates:
 ### 1) Create the Pod
 Run:
 
-`kubectl apply -f manifests/multi-container-pod.yaml`
+```sh
+kubectl apply -f manifests/multi-container-pod.yaml
+```
 
 ### 2) Watch Pod lifecycle
 Run:
 
-`kubectl get pods -w`
+```sh
+kubectl get pods -w
+```
 
 You may briefly see init-related status before `Running`.
 
@@ -85,7 +101,9 @@ Stop watch with `Ctrl+C` once running.
 ### 3) Describe the pod to verify init container completion
 Run:
 
-`kubectl describe pod multi-container-demo`
+```sh
+kubectl describe pod multi-container-demo
+```
 
 Focus on:
 - Init container state (should show completed)
@@ -97,7 +115,9 @@ The init container writes an `index.html` file into shared storage, and nginx se
 
 Run:
 
-`kubectl port-forward pod/multi-container-demo 8081:80`
+```sh
+kubectl port-forward pod/multi-container-demo 8081:80
+```
 
 Open `http://localhost:8081` or `wget http://localhost:8081` and confirm the page content includes:
 
@@ -108,31 +128,43 @@ Stop port-forward with `Ctrl+C`.
 ### 5) Inspect logs from specific containers
 Run:
 
-`kubectl logs multi-container-demo -c web-server`
+```sh
+kubectl logs multi-container-demo -c web-server
+```
 
 Run:
 
-`kubectl logs multi-container-demo -c log-sidecar`
+```sh
+kubectl logs multi-container-demo -c log-sidecar
+```
 
 The sidecar continuously writes timestamps to `/var/log/app.log`.
 
 ### 6) Exec into the sidecar and inspect the generated log file
 Run:
 
-`kubectl exec -it multi-container-demo -c log-sidecar -- sh`
+```sh
+kubectl exec -it multi-container-demo -c log-sidecar -- sh
+```
 
 Then inside the container:
 
-`tail -n 20 /var/log/app.log`
+```sh
+tail -n 20 /var/log/app.log
+```
 
 Exit shell with:
 
-`exit`
+```sh
+exit
+```
 
 ### 7) Cleanup multi-container pod
 Run:
 
-`kubectl delete -f manifests/multi-container-pod.yaml --grace-period=0 --force`
+```sh
+kubectl delete -f manifests/multi-container-pod.yaml --grace-period=0 --force
+```
 
 ---
 
@@ -150,11 +182,15 @@ Run:
 
 - Check events:
 
-`kubectl describe pod <pod-name>`
+```sh
+kubectl describe pod <pod-name>
+```
 
 - Check current status:
 
-`kubectl get pods -o wide`
+```sh
+kubectl get pods -o wide
+```
 
 - If image pull issues appear, verify cluster internet/image registry access.
 - If a pod is stuck `Pending`, verify cluster resources and node readiness.
