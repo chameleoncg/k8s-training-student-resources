@@ -103,3 +103,9 @@ spec:
 4. We can see the install state of our helm install by running `kubectl get helmrepo` and `kubectl get helmrelease`
 5. Now lets look at the source controller and see how it is handling the helmrelease. Run `kubectl get po -n flux-system` and get the name of the source controller.
 6. Run `kubectl -n flux-system exec -it source-controller-7cd5f69dc9-<id of source controller> -- ls -la /data/helmrepository/default/podinfo`. Similar to the gitrepo lab, we can see the source controller has pulled down the index yaml (helm index file). This is exactly what happens when you run `helm repo add podinfo https://stefanprodan.github.io/podinfo` using the helmcli. The source controller is really doing nothing different than what a user would do when installing a chart or manifest. It grabs the source and installs it into the cluster.
+7. Run `make teardown` to clean up the cluster.
+
+## Flux Gitops Lab
+We are going to put the last two labs together in a simple gitops example.
+1. Run `make setup-flux` to install flux into your cluster.
+2. Now lets bootstrap the gitops example into our cluster. `kubectl apply -f kubectl apply -f manifests/gitops-example/bootstrap.yaml`
