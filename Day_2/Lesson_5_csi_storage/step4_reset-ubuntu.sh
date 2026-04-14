@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Safe reset for kind + rook-ceph lab (NO apt/dpkg purges by default)
+# Safe reset for kind + rook-ceph lab
 set -euo pipefail
 
 echo "========================================================"
@@ -98,15 +98,12 @@ fi
 log "--- 5. Removing kubelet/csi/ceph state directories (best-effort, bounded) ---"
 
 DIRS=(
-  "/var/lib/kubelet"
   "/var/lib/csi"
   "/var/lib/rook"
   "/var/lib/ceph"
   "/etc/ceph"
   "/var/log/ceph"
   "/var/run/ceph"
-  "/etc/kubernetes"
-  "$HOME/.kube"
 )
 
 for dir in "${DIRS[@]}"; do
@@ -116,16 +113,9 @@ for dir in "${DIRS[@]}"; do
   fi
 done
 
-# ---- 6) Networking reset (lab-only) ----
-log "--- 6. Resetting iptables (best-effort) ---"
-cmd_timeout 10 $SUDO iptables -F || true
-cmd_timeout 10 $SUDO iptables -t nat -F || true
-cmd_timeout 10 $SUDO iptables -t nat -X || true
-cmd_timeout 10 $SUDO iptables -P FORWARD ACCEPT || true
-
-# ---- 7) Optional: detach known loop device image (best-effort) ----
+# ---- 6) Optional: detach known loop device image (best-effort) ----
 # (Does NOT require apt/dpkg.)
-log "--- 7. Loop device cleanup (best-effort) ---"
+log "--- 6. Loop device cleanup (best-effort) ---"
 LOOP_IMG="/tmp/rook-ceph-loop.img"
 if [ -f "$LOOP_IMG" ]; then
   # Detach any losetup devices tied to the file (if tool exists)
@@ -139,6 +129,6 @@ if [ -f "$LOOP_IMG" ]; then
 fi
 
 echo "========================================================"
-echo "RESET COMPLETE (safe mode: NO apt/dpkg purges)."
+echo "RESET COMPLETE."
 echo "If you still see weird kernel/module behavior, reboot is recommended."
 echo "========================================================"

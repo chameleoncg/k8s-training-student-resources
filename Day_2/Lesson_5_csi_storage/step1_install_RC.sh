@@ -16,7 +16,7 @@ sudo apt install -y docker.io lvm2 thin-provisioning-tools linux-modules-extra-$
 sudo systemctl enable --now docker
 sudo usermod -aG docker "$USER" || true
 
-echo "--- 1.0 Ensure kernel modules likely needed are present/loaded (best effort) ---"
+echo "--- 1.0 Ensure kernel modules likely needed are present ---"
 # rbd + nbd are the typical needs for this lab setup.
 # (If modprobe fails, we keep going; script will still diagnose CSI/node issues later.)
 sudo modprobe nbd max_part=8 || true
