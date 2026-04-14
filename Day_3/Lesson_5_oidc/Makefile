@@ -2,6 +2,7 @@
 
 NAMESPACE ?= oidc
 REALM ?= training
+UPSTREAM_REALM ?= upstream
 CLIENT_ID ?= training-app
 CLIENT_SECRET ?=
 PUBLIC_IP ?= 127.0.0.1
@@ -9,15 +10,20 @@ PORT ?= 8080
 CILIUM_VERSION ?= 1.19.2
 GATEWAY_API_VERSION ?= v1.2.0
 GATEWAY_API_MANIFEST ?= https://github.com/kubernetes-sigs/gateway-api/releases/download/$(GATEWAY_API_VERSION)/standard-install.yaml
+BROKER_ALIAS ?= upstream-saml
 
 KEYCLOAK_HOST ?= keycloak.$(PUBLIC_IP).nip.io
+UPSTREAM_KEYCLOAK_HOST ?= upstream.$(PUBLIC_IP).nip.io
 APP_HOST ?= app.$(PUBLIC_IP).nip.io
 
 KEYCLOAK_URL ?= http://$(KEYCLOAK_HOST):$(PORT)
+UPSTREAM_KEYCLOAK_URL ?= http://$(UPSTREAM_KEYCLOAK_HOST):$(PORT)
 APP_URL ?= http://$(APP_HOST):$(PORT)
 REDIRECT_URI ?= $(APP_URL)/oauth2/callback
 POST_LOGOUT_REDIRECT_URI ?= $(APP_URL)/*
-RENDER_ENV = KEYCLOAK_HOST='$(KEYCLOAK_HOST)' APP_HOST='$(APP_HOST)' PORT='$(PORT)' KEYCLOAK_URL='$(KEYCLOAK_URL)' APP_URL='$(APP_URL)' REDIRECT_URI='$(REDIRECT_URI)' POST_LOGOUT_REDIRECT_URI='$(POST_LOGOUT_REDIRECT_URI)'
+UPSTREAM_SAML_METADATA_URL ?= $(UPSTREAM_KEYCLOAK_URL)/realms/$(UPSTREAM_REALM)/protocol/saml/descriptor
+BROKER_SP_METADATA_URL ?= $(KEYCLOAK_URL)/realms/$(REALM)/broker/$(BROKER_ALIAS)/endpoint/descriptor
+RENDER_ENV = KEYCLOAK_HOST='$(KEYCLOAK_HOST)' UPSTREAM_KEYCLOAK_HOST='$(UPSTREAM_KEYCLOAK_HOST)' APP_HOST='$(APP_HOST)' PORT='$(PORT)' KEYCLOAK_URL='$(KEYCLOAK_URL)' UPSTREAM_KEYCLOAK_URL='$(UPSTREAM_KEYCLOAK_URL)' APP_URL='$(APP_URL)' REDIRECT_URI='$(REDIRECT_URI)' POST_LOGOUT_REDIRECT_URI='$(POST_LOGOUT_REDIRECT_URI)' BROKER_ALIAS='$(BROKER_ALIAS)'
 
 # create the cluster, run `make clean cluster` to recreate it
 cluster:
@@ -51,12 +57,17 @@ deploy-base: namespace
 	kubectl apply -f deployment/echo-app.yaml
 	$(RENDER_ENV) envsubst < deployment/gateway.yaml | kubectl apply -f -
 	kubectl rollout status deployment/keycloak -n $(NAMESPACE) --timeout=300s
+	kubectl rollout status deployment/upstream-keycloak -n $(NAMESPACE) --timeout=300s
 	$(MAKE) relax-http-realms
 	kubectl rollout status deployment/oidc-echo -n $(NAMESPACE) --timeout=180s
 	kubectl wait -n $(NAMESPACE) --for=condition=Accepted=true gateway/oidc-gateway --timeout=180s
 	kubectl wait -n $(NAMESPACE) \
 		--for=jsonpath='{.status.parents[0].conditions[?(@.type=="Accepted")].status}'=True \
 		httproute/keycloak-route \
+		--timeout=180s
+	kubectl wait -n $(NAMESPACE) \
+		--for=jsonpath='{.status.parents[0].conditions[?(@.type=="Accepted")].status}'=True \
+		httproute/upstream-keycloak-route \
 		--timeout=180s
 
 deploy: cluster cilium deploy-base
@@ -93,13 +104,29 @@ relax-http-realms:
 	kubectl exec -n $(NAMESPACE) deploy/keycloak -- \
 		/opt/keycloak/bin/kcadm.sh update realms/$(REALM) \
 		-s sslRequired=NONE >/dev/null
+	kubectl exec -n $(NAMESPACE) deploy/upstream-keycloak -- \
+		/opt/keycloak/bin/kcadm.sh config credentials \
+		--server http://localhost:$(PORT) \
+		--realm master \
+		--user admin \
+		--password admin123admin >/dev/null
+	kubectl exec -n $(NAMESPACE) deploy/upstream-keycloak -- \
+		/opt/keycloak/bin/kcadm.sh update realms/master \
+		-s sslRequired=NONE >/dev/null
+	kubectl exec -n $(NAMESPACE) deploy/upstream-keycloak -- \
+		/opt/keycloak/bin/kcadm.sh update realms/$(UPSTREAM_REALM) \
+		-s sslRequired=NONE >/dev/null
 
 urls:
 	@echo "APP_URL=$(APP_URL)"
-	@echo "PUBLIC_IP=$(PUBLIC_IP)"
+	@echo "BROKER_ALIAS=$(BROKER_ALIAS)"
 	@echo "KEYCLOAK_URL=$(KEYCLOAK_URL)"
-	@echo "REDIRECT_URI=$(REDIRECT_URI)"
 	@echo "POST_LOGOUT_REDIRECT_URI=$(POST_LOGOUT_REDIRECT_URI)"
+	@echo "PUBLIC_IP=$(PUBLIC_IP)"
+	@echo "REDIRECT_URI=$(REDIRECT_URI)"
+	@echo "UPSTREAM_KEYCLOAK_URL=$(UPSTREAM_KEYCLOAK_URL)"
+	@echo "UPSTREAM_SAML_METADATA_URL=$(UPSTREAM_SAML_METADATA_URL)"
+	@echo "BROKER_SP_METADATA_URL=$(BROKER_SP_METADATA_URL)"
 
 clean:
 	kind delete cluster --name training || :

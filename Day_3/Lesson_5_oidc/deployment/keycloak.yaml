@@ -22,24 +22,7 @@ data:
       "loginWithEmailAllowed": true,
       "duplicateEmailsAllowed": false,
       "rememberMe": true,
-      "registrationAllowed": false,
-      "users": [
-        {
-          "username": "student",
-          "enabled": true,
-          "emailVerified": true,
-          "firstName": "OIDC",
-          "lastName": "Student",
-          "email": "student@example.com",
-          "credentials": [
-            {
-              "type": "password",
-              "value": "studentpassword",
-              "temporary": false
-            }
-          ]
-        }
-      ]
+      "registrationAllowed": false
     }
 ---
 apiVersion: apps/v1
@@ -85,17 +68,23 @@ spec:
           ports:
             - containerPort: ${PORT}
               name: http
+          startupProbe:
+            httpGet:
+              path: /realms/master
+              port: http
+            periodSeconds: 10
+            failureThreshold: 24
           readinessProbe:
             httpGet:
               path: /realms/master
               port: http
-            initialDelaySeconds: 25
+            initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /realms/master
               port: http
-            initialDelaySeconds: 60
+            initialDelaySeconds: 30
             periodSeconds: 20
           resources:
             requests:
@@ -121,6 +110,130 @@ metadata:
 spec:
   selector:
     app: keycloak
+  ports:
+    - name: http
+      port: ${PORT}
+      targetPort: http
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: upstream-keycloak-realm-import
+  namespace: oidc
+data:
+  upstream-realm.json: |
+    {
+      "realm": "upstream",
+      "enabled": true,
+      "displayName": "Upstream SAML IdP",
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "rememberMe": true,
+      "registrationAllowed": false,
+      "users": [
+        {
+          "username": "student",
+          "enabled": true,
+          "emailVerified": true,
+          "firstName": "SAML",
+          "lastName": "Student",
+          "email": "student@example.com",
+          "credentials": [
+            {
+              "type": "password",
+              "value": "studentpassword",
+              "temporary": false
+            }
+          ]
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: upstream-keycloak
+  namespace: oidc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: upstream-keycloak
+  template:
+    metadata:
+      labels:
+        app: upstream-keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.5.0
+          args:
+            - start-dev
+            - --http-port=${PORT}
+            - --hostname=${UPSTREAM_KEYCLOAK_URL}
+            - --hostname-backchannel-dynamic=true
+            - --proxy-headers=xforwarded
+            - --import-realm
+          env:
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: admin-username
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: admin-password
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_METRICS_ENABLED
+              value: "true"
+          ports:
+            - containerPort: ${PORT}
+              name: http
+          startupProbe:
+            httpGet:
+              path: /realms/master
+              port: http
+            periodSeconds: 10
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /realms/master
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /realms/master
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: 1
+              memory: 1Gi
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+      volumes:
+        - name: realm-import
+          configMap:
+            name: upstream-keycloak-realm-import
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: upstream-keycloak
+  namespace: oidc
+spec:
+  selector:
+    app: upstream-keycloak
   ports:
     - name: http
       port: ${PORT}

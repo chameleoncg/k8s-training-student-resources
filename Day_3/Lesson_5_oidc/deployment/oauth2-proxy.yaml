@@ -24,7 +24,7 @@ spec:
             - --redirect-url=${REDIRECT_URI}
             - --oidc-issuer-url=${KEYCLOAK_URL}/realms/training
             - --skip-oidc-discovery=true
-            - --login-url=${KEYCLOAK_URL}/realms/training/protocol/openid-connect/auth
+            - --login-url=${KEYCLOAK_URL}/realms/training/protocol/openid-connect/auth?kc_idp_hint=${BROKER_ALIAS}
             - --redeem-url=http://keycloak.oidc.svc.cluster.local:${PORT}/realms/training/protocol/openid-connect/token
             - --oidc-jwks-url=http://keycloak.oidc.svc.cluster.local:${PORT}/realms/training/protocol/openid-connect/certs
             - --scope=openid profile email

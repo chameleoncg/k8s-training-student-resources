@@ -46,12 +46,12 @@ kubectl exec client-pod -- curl -s http://$(kubectl get pod server-pod -o jsonpa
 
 # Apply Default Deny Policy
 kubectl apply -f 06-netpol-deny-all-ingress.yaml  # Block ALL ingress to server
-kubectl exec client-pod -- curl -s --max-time 3 http://<server-ip>:80
-# This should TIME OUT — traffic is blocked!
+kubectl exec client-pod -- curl -s --max-time 3 http://$(kubectl get pod server-pod -o jsonpath='{.status.podIP}'):80
+# This should TIME OUT (exit code 28) — traffic is blocked!
 
 # Allow Specific Traffic
 kubectl apply -f 07-netpol-allow-labeled.yaml  # Allow only pods with role=client
-kubectl exec client-pod -- curl -s http://<server-ip>:80
+kubectl exec client-pod -- curl -s http://$(kubectl get pod server-pod -o jsonpath='{.status.podIP}'):80
 # This should WORK again
 
 # BONUS

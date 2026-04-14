@@ -48,22 +48,5 @@ keycloakConfigCli:
         "loginWithEmailAllowed": true,
         "duplicateEmailsAllowed": false,
         "rememberMe": true,
-        "registrationAllowed": false,
-        "users": [
-          {
-            "username": "student",
-            "enabled": true,
-            "emailVerified": true,
-            "firstName": "OIDC",
-            "lastName": "Student",
-            "email": "student@example.com",
-            "credentials": [
-              {
-                "type": "password",
-                "value": "studentpassword",
-                "temporary": false
-              }
-            ]
-          }
-        ]
+        "registrationAllowed": false
       }
