@@ -32,52 +32,7 @@ kubectl apply --dry-run=client -f manifests/deployment.yaml
 
 ---
 
-## 2) Apply namespace quota
-
-Apply the quota first so its constraints are active:
-
-```sh
-kubectl apply -f manifests/quota.yaml
-kubectl get resourcequota
-kubectl describe resourcequota student-quota
-```
-
-### What to look for
-
-- Hard limits for:
-  - `pods`
-  - `requests.cpu`
-  - `requests.memory`
-  - `limits.cpu`
-  - `limits.memory`
-- Used values should update as you create workloads.
-
----
-
-## 3) Run the stress pod (limits demo)
-
-This pod intentionally requests low memory but tries to consume more than its memory limit.
-
-```sh
-kubectl apply -f manifests/resource-pod.yaml
-kubectl get pod stress-pod -w
-```
-
-Once it fails/restarts, inspect details:
-
-```sh
-kubectl describe pod stress-pod
-kubectl logs stress-pod --previous
-```
-
-### Expected outcome
-
-- Pod may enter `OOMKilled` / restart behavior
-- You should see evidence of memory limit enforcement in pod status/events
-
----
-
-## 4) Run QoS class demo
+## 2) Run QoS class demo
 
 Apply all three QoS example pods:
 
@@ -99,6 +54,51 @@ kubectl get pod qos-guaranteed -o jsonpath='{.status.qosClass}{"\n"}'
 - `qos-best-effort` → `BestEffort`
 - `qos-burstable` → `Burstable`
 - `qos-guaranteed` → `Guaranteed`
+
+---
+
+## 3) Apply namespace quota
+
+Apply the quota first so its constraints are active:
+
+```sh
+kubectl apply -f manifests/quota.yaml
+kubectl get resourcequota
+kubectl describe resourcequota student-quota
+```
+
+### What to look for
+
+- Hard limits for:
+  - `pods`
+  - `requests.cpu`
+  - `requests.memory`
+  - `limits.cpu`
+  - `limits.memory`
+- Used values should update as you create workloads.
+
+---
+
+## 4) Run the stress pod (limits demo)
+
+This pod intentionally requests low memory but tries to consume more than its memory limit.
+
+```sh
+kubectl apply -f manifests/resource-pod.yaml
+kubectl get pod stress-pod -w
+```
+
+Once it fails/restarts, inspect details:
+
+```sh
+kubectl describe pod stress-pod
+kubectl logs stress-pod --previous
+```
+
+### Expected outcome
+
+- Pod may enter `OOMKilled` / restart behavior
+- You should see evidence of memory limit enforcement in pod status/events
 
 ---
 
