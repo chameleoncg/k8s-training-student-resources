@@ -55,9 +55,44 @@ kubectl get pod qos-guaranteed -o jsonpath='{.status.qosClass}{"\n"}'
 - `qos-burstable` → `Burstable`
 - `qos-guaranteed` → `Guaranteed`
 
+### Cleanup
+
+```sh
+kubectl delete -f manifests/qos.yaml
+```
+
 ---
 
-## 3) Apply namespace quota
+## 3) Run the stress pod (limits demo)
+
+This pod intentionally requests low memory but tries to consume more than its memory limit.
+
+```sh
+kubectl apply -f manifests/resource-pod.yaml
+kubectl get pod stress-pod -w
+```
+
+Once it fails/restarts, inspect details:
+
+```sh
+kubectl describe pod stress-pod
+kubectl logs stress-pod --previous
+```
+
+### Expected outcome
+
+- Pod may enter `OOMKilled` / restart behavior
+- You should see evidence of memory limit enforcement in pod status/events
+
+### Cleanup
+
+```sh
+kubectl delete -f manifests/resource-pod.yaml
+```
+
+---
+
+## 4) Apply namespace quota
 
 Apply the quota first so its constraints are active:
 
@@ -79,28 +114,6 @@ kubectl describe resourcequota student-quota
 
 ---
 
-## 4) Run the stress pod (limits demo)
-
-This pod intentionally requests low memory but tries to consume more than its memory limit.
-
-```sh
-kubectl apply -f manifests/resource-pod.yaml
-kubectl get pod stress-pod -w
-```
-
-Once it fails/restarts, inspect details:
-
-```sh
-kubectl describe pod stress-pod
-kubectl logs stress-pod --previous
-```
-
-### Expected outcome
-
-- Pod may enter `OOMKilled` / restart behavior
-- You should see evidence of memory limit enforcement in pod status/events
-
----
 
 ## 5) Apply deployment (requests/limits in a controller)
 
@@ -137,7 +150,7 @@ kubectl describe resourcequota student-quota
 Try scaling or creating extra pods to exceed quota:
 
 ```sh
-kubectl scale deployment nginx-deployment --replicas=3
+kubectl scale deployment nginx-deployment --replicas=5
 kubectl get events --sort-by=.lastTimestamp
 ```
 
