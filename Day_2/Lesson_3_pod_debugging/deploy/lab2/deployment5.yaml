@@ -86,45 +86,52 @@ stringData:
     eaidMvZtwFDwZq8V1Kv4JkDVMOsTG+IxBaMVTzNQ3hlPjRLpgFRlcyafwQ==
     -----END CERTIFICATE-----
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: service5
   namespace: debugging
-  labels:
-    app: service5
 spec:
-  containers:
-    - name: app
-      image: python:3.11-slim
-      command:
-        - python
-        - -c
-        - |
-          import http.server
-          import ssl
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service5
+  template:
+    metadata:
+      labels:
+        app: service5
+    spec:
+      containers:
+        - name: app
+          image: python:3.11-slim
+          command:
+            - python
+            - -c
+            - |
+              import http.server
+              import ssl
 
-          class Handler(http.server.BaseHTTPRequestHandler):
-              def do_GET(self):
-                  self.send_response(200)
-                  self.end_headers()
-                  self.wfile.write(b"ok\n")
+              class Handler(http.server.BaseHTTPRequestHandler):
+                  def do_GET(self):
+                      self.send_response(200)
+                      self.end_headers()
+                      self.wfile.write(b"ok\n")
 
-          httpd = http.server.ThreadingHTTPServer(("0.0.0.0", 8443), Handler)
-          context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-          context.load_cert_chain("/tls/tls.crt", "/tls/tls.key")
-          httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
-          httpd.serve_forever()
-      ports:
-        - containerPort: 8443
-      volumeMounts:
+              httpd = http.server.ThreadingHTTPServer(("0.0.0.0", 8443), Handler)
+              context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+              context.load_cert_chain("/tls/tls.crt", "/tls/tls.key")
+              httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+              httpd.serve_forever()
+          ports:
+            - containerPort: 8443
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+      volumes:
         - name: tls
-          mountPath: /tls
-          readOnly: true
-  volumes:
-    - name: tls
-      secret:
-        secretName: service5-tls
+          secret:
+            secretName: service5-tls
 ---
 apiVersion: v1
 kind: Service
@@ -153,18 +160,12 @@ spec:
       labels:
         app: deployment5
     spec:
-      initContainers:
-        - name: wait
-          image: python:3.11-slim
-          command:
-            - python
-            - -c
-            - |
-              import time
-              time.sleep(15)
       containers:
         - name: app
           image: python:3.11-slim
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
           command:
             - python
             - -c
@@ -172,11 +173,11 @@ spec:
               import time
               import urllib.request
 
-              with urllib.request.urlopen(
-                  "https://service5.debugging.svc.cluster.local",
-                  timeout=5,
-              ) as response:
-                  response.read()
-
               while True:
-                  time.sleep(300)
+                with urllib.request.urlopen(
+                    "https://service5.debugging.svc.cluster.local",
+                    timeout=5,
+                ) as response:
+                    print(response.read().decode())
+
+                time.sleep(8)
