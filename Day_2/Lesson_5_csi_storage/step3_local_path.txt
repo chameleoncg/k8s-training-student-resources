@@ -1,0 +1,41 @@
+#this is a pastable
+
+
+
+
+
+cd ~/code/k8s-training-student-resources/
+git fetch origin
+git reset --hard origin/main
+cd Day_2/Lesson_5_csi_storage/
+chmod +x step*.sh
+
+
+
+
+k8s-training-student-resources/Day_2/Lesson_5_csi_storage$ kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: storage-reader
+spec:
+  containers:
+  - name: busybox
+    image: busybox
+    command: ["sh", "-c", "cat /data/hello.txt"]
+    volumeMounts:
+    - name: data-vol
+      mountPath: /data
+  volumes:
+  - name: data-vol
+    persistentVolumeClaim:
+      claimName: localpath-hello-pvc
+EOF
+
+
+
+
+
+k8s-training-student-resources/Day_2/Lesson_5_csi_storage$kubectl logs storage-reader
+
+
