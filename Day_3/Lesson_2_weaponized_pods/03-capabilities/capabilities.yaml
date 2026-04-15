@@ -1,0 +1,21 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: weaponized-pod-03
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: weaponized-pod-03
+  name: totally-nginx
+spec:
+  terminationGracePeriodSeconds: 0
+  containers:
+    - name: nginx
+      image: nginx:weaponized
+      securityContext:
+        privileged: true
+        capabilities:
+          add:
+            - CAP_SYS_MODULE
