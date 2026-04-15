@@ -130,5 +130,5 @@ fi
 
 echo "========================================================"
 echo "RESET COMPLETE."
-echo "If you still see weird kernel/module behavior, reboot is recommended."
+echo "If you still see weird kernel/module behavior, maybe reboot?"
 echo "========================================================"

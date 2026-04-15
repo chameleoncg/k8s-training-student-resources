@@ -33,7 +33,7 @@ fi
 
 echo "Using Local Path StorageClass: $LP_SC"
 
-# Set default StorageClass to local-path (optional but keeps behavior consistent)
+# Set default StorageClass to local-path 
 kubectl --context "$KIND_CONTEXT" get sc -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}{"\n"}{end}' \
 | awk -F'\t' '$2=="true"{print $1}' \
 | while read -r sc; do
@@ -44,11 +44,11 @@ kubectl --context "$KIND_CONTEXT" get sc -o jsonpath='{range .items[*]}{.metadat
 kubectl --context "$KIND_CONTEXT" patch storageclass "$LP_SC" \
   -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' >/dev/null 2>&1 || true
 
-# Verification names (consistent across create/wait/exec)
+
 PVC_NAME="localpath-hello-pvc"
 POD_NAME="localpath-hello-writer"
 
-# Cleanup old resources
+# Cleanup old resources just in case
 kubectl --context "$KIND_CONTEXT" -n default delete pod "$POD_NAME" --ignore-not-found >/dev/null 2>&1 || true
 kubectl --context "$KIND_CONTEXT" -n default delete pvc "$PVC_NAME" --ignore-not-found >/dev/null 2>&1 || true
 

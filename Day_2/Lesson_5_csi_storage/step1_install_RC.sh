@@ -17,8 +17,6 @@ sudo systemctl enable --now docker
 sudo usermod -aG docker "$USER" || true
 
 echo "--- 1.0 Ensure kernel modules likely needed are present ---"
-# rbd + nbd are the typical needs for this lab setup.
-# (If modprobe fails, we keep going; script will still diagnose CSI/node issues later.)
 sudo modprobe nbd max_part=8 || true
 sudo modprobe rbd || true
 
@@ -27,20 +25,23 @@ sudo apt-get install -y util-linux >/dev/null 2>&1 || true
 
 echo "--- 1.2 Create a dedicated, zero-filled loop device for OSDs ---"
 LOOP_IMG="/tmp/rook-ceph-loop.img"
-LOOP_SIZE="20G"
+
+# 5GiB with bs=1M => 5*1024 MiB => 5120 blocks
+LOOP_SIZE="5GiB"
+COUNT_MIB=5120
 
 sudo rm -f "$LOOP_IMG" || true
 sudo losetup -D || true
 
 echo "--- 1.3 Zero-fill loop image (avoid bluestore label garbage) ---"
-sudo dd if=/dev/zero of="$LOOP_IMG" bs=1M count=20480 conv=fsync status=progress
+sudo dd if=/dev/zero of="$LOOP_IMG" bs=1M count="${COUNT_MIB}" conv=fsync status=progress
 
 sudo losetup -fP "$LOOP_IMG"
 
 LOOP_DEV_NAME="$(sudo losetup -j "$LOOP_IMG" | awk -F: '{print $1}' | head -n1)"
 LOOP_KNAME="$(basename "$LOOP_DEV_NAME")"
 
-echo "Created loop device: $LOOP_DEV_NAME (kname=$LOOP_KNAME)"
+echo "Created loop device: $LOOP_DEV_NAME (kname=$LOOP_KNAME) (loop size request: $LOOP_SIZE)"
 
 echo "--- 1.4 udev settle/trigger ---"
 sudo udevadm settle || true
@@ -160,8 +161,10 @@ while true; do
     kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" logs deploy/rook-ceph-operator --tail=250 || true
     kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get jobs || true
     kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get pods -l app=rook-ceph-osd -o wide || true
-    # dump latest OSD prepare job logs if any jobs exist
-    osdjob="$(kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get jobs -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null | grep 'rook-ceph-osd-prepare' | head -n1 || true)"
+
+    osdjob="$(kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" get jobs -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null \
+      | grep 'rook-ceph-osd-prepare' | head -n1 || true)"
+
     if [ -n "${osdjob}" ]; then
       kubectl --context "$KIND_CONTEXT" -n "$ROOK_NS" logs "job/${osdjob}" --tail=300 || true
     fi

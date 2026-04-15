@@ -1,0 +1,48 @@
+#this is a pastable
+
+
+#pull our folder
+cd ~/code/k8s-training-student-resources/
+git fetch origin
+# Overwrite Lesson 5 directory from remote
+git checkout origin/main -- Day_2/Lesson_5_csi_storage/
+cd Day_2/Lesson_5_csi_storage/
+chmod +x step*.sh
+
+
+# note Job instead of Pod
+k8s-training-student-resources/Day_2/Lesson_5_csi_storage$
+kubectl apply -f - <<EOF
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: storage-reader-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: busybox
+        image: busybox:1.36
+        command: ["sh", "-c", "cat /data/hello.txt"]
+        volumeMounts:
+        - name: data-vol
+          mountPath: /data
+      volumes:
+      - name: data-vol
+        persistentVolumeClaim:
+          claimName: localpath-hello-pvc
+      restartPolicy: Never
+  backoffLimit: 2
+EOF
+
+
+
+k8s-training-student-resources/Day_2/Lesson_5_csi_storage$
+kubectl wait --for=condition=complete job/storage-reader-job --timeout=60s
+
+# Get logs by the Job label (this finds the pod for you)
+kubectl logs -l job-name=storage-reader-job
+
+
+k8s-training-student-resources/Day_2/Lesson_5_csi_storage$
+kubectl get pods -n default --context kind-localpath-lab

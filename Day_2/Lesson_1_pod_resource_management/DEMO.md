@@ -32,25 +32,34 @@ kubectl apply --dry-run=client -f manifests/deployment.yaml
 
 ---
 
-## 2) Apply namespace quota
+## 2) Run QoS class demo
 
-Apply the quota first so its constraints are active:
+Apply all three QoS example pods:
 
 ```sh
-kubectl apply -f manifests/quota.yaml
-kubectl get resourcequota
-kubectl describe resourcequota student-quota
+kubectl apply -f manifests/qos.yaml
+kubectl get pods
 ```
 
-### What to look for
+Check each pod’s QoS class:
 
-- Hard limits for:
-  - `pods`
-  - `requests.cpu`
-  - `requests.memory`
-  - `limits.cpu`
-  - `limits.memory`
-- Used values should update as you create workloads.
+```sh
+kubectl get pod qos-best-effort -o jsonpath='{.status.qosClass}{"\n"}'
+kubectl get pod qos-burstable -o jsonpath='{.status.qosClass}{"\n"}'
+kubectl get pod qos-guaranteed -o jsonpath='{.status.qosClass}{"\n"}'
+```
+
+### Expected mapping
+
+- `qos-best-effort` → `BestEffort`
+- `qos-burstable` → `Burstable`
+- `qos-guaranteed` → `Guaranteed`
+
+### Cleanup
+
+```sh
+kubectl delete -f manifests/qos.yaml
+```
 
 ---
 
@@ -75,32 +84,36 @@ kubectl logs stress-pod --previous
 - Pod may enter `OOMKilled` / restart behavior
 - You should see evidence of memory limit enforcement in pod status/events
 
----
-
-## 4) Run QoS class demo
-
-Apply all three QoS example pods:
+### Cleanup
 
 ```sh
-kubectl apply -f manifests/qos.yaml
-kubectl get pods
+kubectl delete -f manifests/resource-pod.yaml
 ```
-
-Check each pod’s QoS class:
-
-```sh
-kubectl get pod qos-best-effort -o jsonpath='{.status.qosClass}{"\n"}'
-kubectl get pod qos-burstable -o jsonpath='{.status.qosClass}{"\n"}'
-kubectl get pod qos-guaranteed -o jsonpath='{.status.qosClass}{"\n"}'
-```
-
-### Expected mapping
-
-- `qos-best-effort` → `BestEffort`
-- `qos-burstable` → `Burstable`
-- `qos-guaranteed` → `Guaranteed`
 
 ---
+
+## 4) Apply namespace quota
+
+Apply the quota first so its constraints are active:
+
+```sh
+kubectl apply -f manifests/quota.yaml
+kubectl get resourcequota
+kubectl describe resourcequota student-quota
+```
+
+### What to look for
+
+- Hard limits for:
+  - `pods`
+  - `requests.cpu`
+  - `requests.memory`
+  - `limits.cpu`
+  - `limits.memory`
+- Used values should update as you create workloads.
+
+---
+
 
 ## 5) Apply deployment (requests/limits in a controller)
 
@@ -137,7 +150,7 @@ kubectl describe resourcequota student-quota
 Try scaling or creating extra pods to exceed quota:
 
 ```sh
-kubectl scale deployment nginx-deployment --replicas=3
+kubectl scale deployment nginx-deployment --replicas=5
 kubectl get events --sort-by=.lastTimestamp
 ```
 
