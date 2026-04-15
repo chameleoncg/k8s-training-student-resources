@@ -1,0 +1,10 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: jedi
+  name: jedi
+rules:
+  # 2. Grant everything in the core group EXCEPT secrets
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "persistentvolumeclaims", "events"]
+    verbs: ["*"]
