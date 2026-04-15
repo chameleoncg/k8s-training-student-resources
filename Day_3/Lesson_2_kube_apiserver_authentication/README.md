@@ -23,7 +23,7 @@ In this lab, we will create a new user identified by a client certificate signed
 1. Create a x509 certificate signing request (csr)
 
 ```bash
-openssl req -new -neykey rsa:2048 -keyout luke.key -out luke.csr -subj "/CN=Luke Skywalker/O=Jedi/O=Rebel Alliance"
+openssl req -new -newkey rsa:2048 -nodes -keyout luke.key -out luke.csr -subj "/CN=Luke Skywalker/O=Jedi/O=Rebel Alliance"
 ```
 
 2. Create a Kubernetes CertificateSigningRequest for the x509 csr
