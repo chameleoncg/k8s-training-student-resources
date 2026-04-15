@@ -4,6 +4,22 @@
 > <br/>
 > This folder contains a collection of pods that are examples of various attacks on Kubernetes clusters using misconfigured pods. These **should never** be deployed in any environment outside of the context of this training.
 
+## Setup
+
+For these examples, we will use a single kind cluster with a specific configuration.
+
+1. Delete any previous clusters
+
+```bash
+kind delete clusters --all
+```
+
+2. Create our victim cluster
+
+```bash
+kind create cluster --config cluster.yaml
+```
+
 ## 01-privileged-pod
 
 This example shows how a pod with a privileged security context and hostPID can breakout of the container and access the root filesystem. This is done using the _official_ alpine image with no modifications. To perform this exploit:
@@ -63,32 +79,28 @@ This example is extremely nasty. We showcase how a pod which was able to add sys
 docker build -t nginx:weaponized 03-add-capabilities/image/
 ```
 
-2. Start the kubernetes cluster
-```bash
-kind create cluster --config 03-add-capabilities/cluster.yaml
-```
-
-3. Load our weaponized container image into the kind cluster containerd
+2. Load our weaponized container image into the kind cluster containerd
 ```bash
 kind load docker-image nginx:weaponized
 ```
 
-4. Deploy the weaponized nginx
+3. Deploy the weaponized nginx
 ```bash
 kubectl apply -f 03-add-capabilities/add-capabilities.yaml
 ```
 
-5. Check application
+4. Check application
 ```bash
 curl -sL http://localhost
 ```
 
-6. Look at the host kernel logs
+5. Look at the kind node kernel logs
 ```bash
 docker exec kind-control-plane dmesg | grep Module
 ```
 
-7. Check to see loaded modules on the host
+6. Check to see loaded modules on the host
+
 ```bash
 sudo lsmod | grep Totally_Legit_Module
 ```
