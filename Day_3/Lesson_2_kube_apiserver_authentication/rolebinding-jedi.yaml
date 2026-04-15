@@ -7,3 +7,7 @@ subjects:
   - kind: Group
     name: Jedi
     apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: jedi
+  apiGroup: rbac.authorization.k8s.io

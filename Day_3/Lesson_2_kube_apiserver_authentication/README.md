@@ -97,6 +97,19 @@ kubectl apply -f rolebinding-jedi.yaml
 kubectl --context luke-skywalker get all -n jedi
 ```
 
+You should see the following.
+```
+Error from server (Forbidden): replicationcontrollers is forbidden: User "Luke Skywalker" cannot list resource "replicationcontrollers" in API group "" in the namespace "jedi"
+Error from server (Forbidden): daemonsets.apps is forbidden: User "Luke Skywalker" cannot list resource "daemonsets" in API group "apps" in the namespace "jedi"
+Error from server (Forbidden): deployments.apps is forbidden: User "Luke Skywalker" cannot list resource "deployments" in API group "apps" in the namespace "jedi"
+Error from server (Forbidden): replicasets.apps is forbidden: User "Luke Skywalker" cannot list resource "replicasets" in API group "apps" in the namespace "jedi"
+Error from server (Forbidden): statefulsets.apps is forbidden: User "Luke Skywalker" cannot list resource "statefulsets" in API group "apps" in the namespace "jedi"
+Error from server (Forbidden): horizontalpodautoscalers.autoscaling is forbidden: User "Luke Skywalker" cannot list resource "horizontalpodautoscalers" in API group "autoscaling" in the namespace "jedi"
+Error from server (Forbidden): cronjobs.batch is forbidden: User "Luke Skywalker" cannot list resource "cronjobs" in API group "batch" in the namespace "jedi"
+Error from server (Forbidden): jobs.batch is forbidden: User "Luke Skywalker" cannot list resource "jobs" in API group "batch" in the namespace "jedi"
+```
+If you look at the jedi role in `role-jedi.yaml`, this makes sense. The jedi role only has permission to work with `pods`, `services`, `configmaps`, `persistentvolumeclaims`, and `events`.
+
 4. **TRY YOURSELF**
 
 Create a new RoleBinding that will allow luke skywalker to use the `jedi-master` role. Note how he still cannot view secrets within the jedi namespace.
