@@ -58,12 +58,6 @@ cat /host/var/log/root_link/etc/shadow
 
 This example is extremely nasty. We showcase how a pod which was able to add system capabilities, in this case `CAP_SYS_MODULE`, was able to use the official `nginx` container, with a malicious kernel module bundled into it, is able to install the module **on the kubernetes node kernel** to execute any code at [ring 0](https://en.wikipedia.org/wiki/Protection_ring).
 
-1. Create a kind cluster for this example
-
-```bash
-kind create cluster --config 03-add-capabilities/cluster.yaml
-```
-
 1. Build the weaponized container image
 ```bash
 docker build -t nginx:weaponized 03-add-capabilities/image/
@@ -71,7 +65,7 @@ docker build -t nginx:weaponized 03-add-capabilities/image/
 
 2. Start the kubernetes cluster
 ```bash
-kind create cluster --config config.yaml
+kind create cluster --config 03-add-capabilities/cluster.yaml
 ```
 
 3. Load our weaponized container image into the kind cluster containerd
