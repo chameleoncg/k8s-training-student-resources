@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment4
+  namespace: debugging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deployment4
+  template:
+    metadata:
+      labels:
+        app: deployment4
+    spec:
+      volumes:
+      containers:
+        - name: app
+          image: debugging/distro-python:1.0.0
+          imagePullPolicy: IfNotPresent

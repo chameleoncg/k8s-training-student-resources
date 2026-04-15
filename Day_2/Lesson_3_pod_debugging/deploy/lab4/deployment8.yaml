@@ -1,21 +1,36 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: log-data
+  namespace: debugging
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Mi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: deployment4
+  name: deployment8
   namespace: debugging
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: deployment4
+      app: deployment8
   template:
     metadata:
       labels:
-        app: deployment4
+        app: deployment8
     spec:
       volumes:
         - name: hide-etc
           emptyDir: {}
+        - name: logs
+          persistentVolumeClaim:
+            claimName: log-data
       containers:
         - name: app
           image: debugging/distroless-python:1.0.0
@@ -23,3 +38,5 @@ spec:
           volumeMounts:
             - name: hide-etc
               mountPath: /etc
+            - name: logs
+              mountPath: /var/log/app
