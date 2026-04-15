@@ -1,0 +1,17 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jedi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: jedi
+  name: jedi-council
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  namespace: jedi
+  name: padawans

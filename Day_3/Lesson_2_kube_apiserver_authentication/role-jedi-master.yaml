@@ -1,0 +1,14 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: jedi
+  name: master
+rules:
+  # 1. Grant everything in non-core API groups (e.g., apps, batch, networking)
+  - apiGroups: ["apps", "batch", "autoscaling", "networking.k8s.io", "storage.k8s.io", "rbac.authorization.k8s.io"]
+    resources: ["*"]
+    verbs: ["*"]
+  # 2. Grant everything in the core group EXCEPT secrets
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "persistentvolumeclaims", "nodes", "namespaces", "events"]
+    verbs: ["*"]
