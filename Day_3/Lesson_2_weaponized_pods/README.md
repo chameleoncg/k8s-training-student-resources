@@ -97,3 +97,20 @@ sudo lsmod | grep Totally_Legit_Module
 ```
 sudo rmmod Totally_Legit_Module
 ```
+
+
+## 04-debug-pod
+
+This is less an example about a weaponized pod, and more highlighting the security considerations and implications related to [kubernetes debug containers](https://kubernetes.io/blog/2026/03/18/securing-production-debugging-in-kubernetes/)
+
+1. Use a kubernetes debug pod to get host access to a node. Yes its this easy.
+
+```bash
+kubectl debug node/kind-control-plane -it --image=alpine --profile=sysadmin
+```
+
+2. Access the host /etc/shadow
+
+```bash
+cat /host/etc/shadow
+```
