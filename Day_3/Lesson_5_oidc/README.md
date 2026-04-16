@@ -1,5 +1,15 @@
 # OIDC Lab With An Upstream SAML IdP
 
+```mermaid
+flowchart LR
+   U[User] --> D
+   A[Broker Keycloak] --> B["Upstream Keycloak<br/>(User Authority)"]
+   C[OAuth2-Proxy] --> A
+   D[Hashicorp HTTP Echo] --> C[OAuth2-Proxy]
+   B --Maps Users--> A
+   U -.Authenticates.-> B
+```
+
 Create a local `kind` cluster with:
 
 * a broker Keycloak running in HTTP dev mode for the app-facing OIDC flow
