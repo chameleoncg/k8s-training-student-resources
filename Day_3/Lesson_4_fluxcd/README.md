@@ -161,4 +161,6 @@ metadata:
 ...
 ```
 The kustomize kustomization is pointing kustomize to specific files to apply. Without a kustomization yaml, kustomize would just deploy everything in this directory. You'll also note that item one of the kustomization.yaml points back to the gotk-sync.yaml. That means that flux is not only installing the previous labs, it is monitoring your install of your gitops. If gotk-sync.yaml is updated to point to another branch, that branch would be automatically applied to your cluster. 
+
 5. If you are doing this lab during the k8s training, please post "Gitops deployed... waiting..." in the call. 
+
