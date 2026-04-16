@@ -92,6 +92,116 @@ gave you the credentials for updated credentials.
 
 ## Deployment 3
 
+Deployment three is rather unique in that if you start just by looking for
+pods, you'll not see deployment three.
+
+`kubectl get pods -n debugging`
+
+```
+NAME                                  READY   STATUS             RESTARTS         AGE
+deployment1-5c958c5b79-pxq4s          1/1     Running            0                16m
+deployment2-6495bcf979-7p8fk          0/1     ImagePullBackOff   0                27m
+deployment4-77d498bf4f-jdr27          0/1     Error              10 (6m16s ago)   27m
+...
+```
+
+To gather information about what is going wrong here, walk through the
+describing deployment and then replicaset.
+
+`kubectl describe deployment -n debugging deployment3`
+
+```
+  ReplicaFailure   True    FailedCreate
+  Progressing      False   ProgressDeadlineExceeded
+OldReplicaSets:    <none>
+NewReplicaSet:     deployment3-7ddd5f85b5 (0/1 replicas created)
+Events:
+  Type    Reason             Age   From                   Message
+  ----    ------             ----  ----                   -------
+  Normal  ScalingReplicaSet  29m   deployment-controller  Scaled up replica set deployment3-7ddd5f85b5 from 0 to 1
+```
+
+Note, not major errors in the Event log for the deployment.
+
+`kubectl describe replicaset -n debugging deployment3-######`
+
+Note the errors in the event log.
+
+```
+Events:
+  Type     Reason        Age   From                   Message
+  ----     ------        ----  ----                   -------
+  Warning  FailedCreate  31m   replicaset-controller  Error creating: admission webhook "validate.kyverno.svc-fail" denied the request:
+
+resource Pod/debugging/deployment3-7ddd5f85b5-r4jq4 was blocked due to the following policies
+
+require-guard-for-policy-target:
+  require-guard-label: 'validation error: guard: training is required. rule require-guard-label
+    failed at path /metadata/labels/guard/'
+```
+
+This suggests to take a look at the Kyverno policies.
+
+`kubectl get kyverno -A`
+
+Shows all kyverno policies; you will see one clusterpolicy that is applied to
+this cluster. You can gain more information by describing this policy.
+
+`kubectl describe clusterpolicies  require-guard-for-policy-target`
+
+See the rule at the top.
+
+```
+  Rules:
+    Match:
+      Any:
+        Resources:
+          Kinds:
+            Pod
+    Name:  require-guard-label
+    Preconditions:
+      All:
+        Key:                   {{ request.object.metadata.labels.training || '' }}
+        Operator:              Equals
+        Value:                 policy-target
+    Skip Background Requests:  true
+    Validate:
+      Allow Existing Violations:  true
+      Message:                    guard: training is required
+      Pattern:
+        Metadata:
+          Labels:
+            Guard:            training
+```
+
+This requires that there be a label called `guard: training` against any pod
+that has the label `training=policy-target`.
+
+From describing the pod earlier, we can see that this deployment would deploy
+pods with that label.
+
+```
+RollingUpdateStrategy:  25% max unavailable, 25% max surge
+Pod Template:
+  Labels:  app=deployment3
+           training=policy-target
+  Containers:
+```
+
+To fix, update the deployment file to add the appropriate label.
+
+```
+  template:
+    metadata:
+      labels:
+        app: deployment3
+        training: policy-target
+        guard: training
+    spec:
+```
+
+And reapply it to your cluster.
+
 # LAB2
 
 ## Deployment 4
