@@ -1,10 +1,4 @@
-# RBAC Lab - Step 3: ServiceAccount + Pod to test RBAC permissions
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: lab-viewer
-  namespace: default
----
+# RBAC Lab - Pod running as the lab-viewer ServiceAccount
 apiVersion: v1
 kind: Pod
 metadata:

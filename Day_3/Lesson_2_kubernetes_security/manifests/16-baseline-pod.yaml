@@ -1,0 +1,15 @@
+# Pod Security Lab - A pod that passes 'baseline' but FAILS 'restricted'
+# This pod avoids the obvious dangerous settings (no hostNetwork, no privileged)
+# but still runs as root and does not drop capabilities
+apiVersion: v1
+kind: Pod
+metadata:
+  name: baseline-pod
+  namespace: default
+spec:
+  containers:
+  - name: app
+    image: nginx:latest
+    # Passes baseline: no hostNetwork, no privileged, no hostPID
+    # Fails restricted: runs as root, no seccomp, no capability drop,
+    #                    no runAsNonRoot, allowPrivilegeEscalation not set

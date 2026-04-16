@@ -1,0 +1,12 @@
+# Network Policy Lab - Default deny ALL ingress traffic in the namespace
+# An empty podSelector {} matches every pod in the namespace
+# No ingress rules = all inbound traffic is denied
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: default
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress

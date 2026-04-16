@@ -1,4 +1,4 @@
-# RBAC Lab - Step 1: Create a read-only Role for pods in the default namespace
+# RBAC Lab - Role: read-only access to pods in the default namespace
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
