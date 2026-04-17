@@ -206,9 +206,108 @@ And reapply it to your cluster.
 
 ## Deployment 4
 
+In this deployment, the pod appears to be in a CrashLoopBackOff, as
+recommended, you should start with just a describe and see if there's anything
+interesting there.
+
+`kubectl describe pod -n debugging <pod>`
+
+Unfortunately, nothing shows up from the describe that is overly useful.
+
+```
+  Type     Reason   Age                    From     Message
+  ----     ------   ----                   ----     -------
+  Normal   Pulled   4m10s (x243 over 20h)  kubelet  spec.containers{app}: Container image "debugging/distro-python:1.0.0" already present on machine and can be accessed by the pod
+  Normal   Created  4m10s (x243 over 20h)  kubelet  spec.containers{app}: Container created
+  Warning  BackOff  4m9s (x1047 over 20h)  kubelet  spec.containers{app}: Back-off restarting failed container app in pod deployment4-77d498bf4f-jdr27_debugging(dea3e6cd-66b8-47aa-ac23-3f828824095b)
+```
+
+Next, you should likely run logs against the pod
+
+`kubectl logs -n debugging deployment4-77d498bf4f-jdr27`
+
+Revealing
+
+```
+Defaulting to default logging, to increase logging, set LOG_LEVEL to DEBUG
+LOG_LEVEL: None
+```
+
+Seeing this, the logs suggest adding an environment variable for "LOG_LEVEL"
+and set it to DEBUG. To do that, edit the deployment and add the following.
+
+```
+    spec:
+      volumes:
+      containers:
+        - name: app
+          image: debugging/distro-python:1.0.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: LOG_LEVEL
+              value: DEBUG
+```
+
+After adding the environment variable, rechecking the logs shows the following.
+
+```
+LOG_LEVEL: DEBUG
+Missing or inccorect value for required variable REQUIRED_ENV. Set it to "true".
+```
+
+Seeing this, the logs suggest adding an environment variable called
+"REQUIRED_ENV" and setting it to "true". Do this similar to the above,
+after doing this, the pod runs successfully.
+
 ## Deployment 5
 
+Similar to deployment 4, this deployment is in a CrashLoopBackOff. Describing
+the deployment does not reveal anything useful.
+
+Looking at the logs for the pod, so the following:
+
+
+
 ## Deployment 6
+
+Unlike deployment 4 and 5, this pod appears to be running successfully, or at
+least, it has the "Running" status. Describing the pod does not reveal anything
+interesting, however, the logs for the pod shows.
+
+```
+Writing logs to /var/log
+Error in appliation, exiting
+```
+
+This log suggest the application is likely not running correctly. If this were
+a web application, it would be good to check the web UI; but this is not, so
+we will just have to trust the logs. The logs suggest reading a log in
+/var/log.
+
+To view the file system of the container, exec into the container.
+
+`kubectl exec -it -n debugging <pod> -- /bin/bash`
+
+Upon doing so, we see the following files in /var/log/
+
+```
+root@deployment6-5884bb9dc5-7cxbp:/app# cd /var/log
+root@deployment6-5884bb9dc5-7cxbp:/var/log# ls
+alternatives.log  apt  btmp  dpkg.log  lastlog  log.txt  wtmp
+```
+
+For those familiar with linux, you probably notice a stand out "log.txt" file.
+
+cat'ing that file shows the following
+
+```
+root@deployment6-5884bb9dc5-7cxbp:/var/log# cat log.txt
+Missing or incorrect value for required variable REQUIRED_ENV2. Set it to "true".
+```
+
+Similar to Lab 4, this suggested a missing env variable REQUIRED_ENV2.
+Upon doing that, the pod stays in a Running status, now with no errors in the
+log output.
 
 # LAB3
 
