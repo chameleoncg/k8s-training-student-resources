@@ -1,20 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: deployment4
+  name: deployment6
   namespace: debugging
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: deployment4
+      app: deployment6
   template:
     metadata:
       labels:
-        app: deployment4
+        app: deployment6
     spec:
-      volumes:
       containers:
         - name: app
-          image: debugging/distro-python:1.0.0
+          image: debugging/lab6-python:1.0.0
           imagePullPolicy: IfNotPresent
