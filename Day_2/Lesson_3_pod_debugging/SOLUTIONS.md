@@ -569,3 +569,186 @@ successfully.
 
 ## Deployment 8
 
+For deployment 8, we can see the pod is in a CrashLoopBackOff. Describing the
+deployment and pod doesn't seem to reveal anything too useful. Looking at the
+pod logs show
+
+```
+Writing logs to /var/log/app/log.txt
+```
+
+Easy enough, let's shell into the container and look at that file. Oh no,
+I can't do that, because the container is not running. Upon observing that,
+there are a number of different paths that are reasonable to pursue, I'm going
+to describe those as different numbers.
+
+### Approach 0 - Gain more info, does not directly solve problem
+
+This approach will not directly lead to more information, but is a useful
+technique, so I'm going to highlight it. In a situation where the container
+is failing immediately, but you want to shell into it, you may want to change
+the entrypoint (or rather, set the command) so that the container keeps
+running.
+
+This won't work in this situation because there is not a shell for us to
+actually use in this container to use, but is a useful trick when wanting
+to get into a container that keeps failing.
+
+If you want to see an example of this with the distro container, add this
+to your deployment under your container spec.
+
+```
+      - command:
+        - python
+        - -c
+        - print('hello world')
+```
+
+This will make the pod exit with a "Completed" state, and you'll see a
+"hello world" in your logs. If you did have a shell, you could instead run
+a sleep here and be able to exec into the container.
+
+### Approach 1 - Use kubectl debug to browse the filesystem
+
+By default, we will not be able to use kubectl debug with an ephemeral
+container to browse the filesystem (in the running container) if the
+container is stopped. See Approach 2 and Approach 3 for options that
+do not require keeping the container running.
+
+By applying a technique highlighed in Approach 0, we can make the container
+keep running. Add the following command to the container in the deployment.
+
+```
+command: ['python', '-c', 'import subprocess, time; subprocess.Popen(["python", "/app/app.py"]); time.sleep(600)']
+```
+
+What this does, is starts a sub-process to call the normal entrypoint
+`python /app/app.py" and then slees for 10 minutes. To find the right command
+to call, we can docker inspect the image it will run and look at its
+`Entrypoint`.
+
+After doing this, you can see the container remains in the Running state;
+however, we still cannot shell into it. Attemping to do so simply tells
+us the container does not have a /bin/sh or /bin/bash.
+
+Once the container is running, we can use an ephemeral container to interact
+with it. 
+
+```
+kubectl debug -n debugging <pod> -it --image=busybox --profile=sysadmin --target=app
+```
+
+`--image=<image>` says what image to use for the ephemeral container to use
+`--target=<container>` says to share namespaces with the specified container
+`--profile=<profile>` is required because without it, the mount won't show up
+
+After doing this, you'll be shell'd into an ephemeral container in the
+same namespace as the app container.
+
+Inside that container, we can do the following. Note, 
+
+```
+~ # ls /proc/1/root/var/log/app/
+log.txt
+~ # cat /proc/1/root/var/log/app/log.txt
+```
+
+Note: /proc/1/ is the file system of the target container you're debugging.
+
+```
+Missing or incorrect value for required variable REQUIRED_ENV4. Set it to "true".Missing or incorrect value for required variable REQUIRED_ENV4. Set it to "true".Missing or incorrect value for required variable REQUIRED_ENV4. Set it to "true".Missing or incorrect value for required variable REQUIRED_ENV4. Set it to "true".
+```
+
+This reveals interesting information, go to ### Setting the environment variable
+
+### Approach 2 - Use copy-to to copy the contents out to a debug pod
+
+Since the container is not running, I will not be able to directly shell
+into it (even if the container had a shell). Because of this, I will choose
+to use a debug container that I copy the contents to. This commands does that
+
+```
+kubectl debug -n debugging <pod> -it --image=busybox --set-image=app=busybox --copy-to=debug-pod --container=app
+```
+
+Here's what that command does. It copies the container debugging/<pod>/app into
+a pod called "debug-pod" and sets the image to use for the debug pod container
+to be busy-box instead of the image from app. Finally, it opens up a shell
+onto that debug pod that was just created. 
+
+Inside that container, we can do the following
+
+```
+~ # ls /var/log/app/
+log.txt
+~ # cat /var/log/app/log.txt
+```
+
+```
+Missing or incorrect value for required variable REQUIRED_ENV4. Set it to "true".Missing or incorrect value for required variable REQUIRED_ENV4. Set it to "true".Missing or incorrect value for required variable REQUIRED_ENV4. Set it to "true".Missing or incorrect value for required variable REQUIRED_ENV4. Set it to "true".
+```
+
+This reveals interesting information, go to ### Setting the environment variable
+
+#### Approach 2.1 - Directly browse the filesystem
+
+Approach 2  describes using more native k8s tools to basically make a temporary
+debug container using the file system from the failed container that is still
+on disk. Someone who paid close attention to the containers lesson might
+remember that you could use linux commands and/or containerd commands to do
+this completely outside of the context of k8s. This is generally more
+complicated the the other approaches, so I won't cover it here. But give it a
+try if you're adventurous.
+
+### Approach 3 - Find the /var/log/app mount on disk
+
+If you (like you should) begin your investigation into the failure by looking
+at the describe for the deployments and pods, you might have noticed that
+/var/log/app is a mounted directory. 
+
+If you grab the volumes from the cluster, you will see this
+
+```
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+pvc-7d06ddac-6d64-4e0c-a9ef-fca4717c8f15   10Mi       RWO            Delete           Bound    debugging/log-data   standard       <unset>                          45h
+```
+
+If we describe the pv, we can see
+
+```
+Source:
+    Type:          HostPath (bare host directory volume)
+    Path:          /var/local-path-provisioner/pvc-7d06ddac-6d64-4e0c-a9ef-fca4717c8f15_debugging_log-data
+    HostPathType:  DirectoryOrCreate
+```
+
+Since we're in kind, and using local-path-provisioner, we probably have direct
+access to the file on disk. I know this pod is running on the only worker
+node I have in the cluster. Let's exec into that kind node.
+
+`docker ps`
+
+```
+CONTAINER ID   IMAGE                  COMMAND                  CREATED        STATUS        PORTS                       NAMES
+f863397ef408   kindest/node:v1.35.0   "/usr/local/bin/entr…"   46 hours ago   Up 46 hours                               training-worker
+8fad75e1b6fc   kindest/node:v1.35.0   "/usr/local/bin/entr…"   46 hours ago   Up 46 hours   127.0.0.1:40609->6443/tcp   training-control-plane
+```
+
+`docker exec -it training-worker /bin/bash`
+
+```
+root@training-worker:/# ls /var/local-path-provisioner/pvc-7d06ddac-6d64-4e0c-a9ef-fca4717c8f15_debugging_log-data/
+log.txt
+```
+
+If we cat that file `cat log.txt` we see
+
+```
+Missing or incorrect value for required variable REQUIRED_ENV4. Set it to "true".Missing or incorrect value for required variable REQUIRED_ENV4. Set it to "true".Missing or incorrect value for required variable REQUIRED_ENV4. Set it to "true".Missing or incorrect value for required variable REQUIRED_ENV4. Set it to "true".
+```
+
+### Setting the environment variable
+
+Regarless of the path you pursued, all of them lead you to setting
+"REQUIRED_ENV4" to "true" as an environment variable. Do this similar
+to the others deployments.
