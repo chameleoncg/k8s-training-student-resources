@@ -447,6 +447,124 @@ log output.
 
 ## Deployment 7
 
+For deployment7, we can see the pod is stuck in an Init:0/1 state, when getting
+pods in the cluster.
+
+This status tells us there is an init container that is not completing.
+
+```
+deployment6-5f994d95c8-xhbgg          1/1     Running            144 (5m43s ago)   24h
+deployment7-599b5f769f-2lbt9          0/1     Init:0/1           0                 45h
+deployment8-79897db4b6-96x5w          0/1     CrashLoopBackOff   530 (4m29s ago)   45h
+```
+
+If we describe the pod we something similar, and Init Container that is in the
+status "Running." 
+
+If we try to get the logs of the pod, you will see an error if you just run
+this command.
+
+`kubectl logs -n debugging <pod>`
+
+```
+Defaulted container "app" out of: app, wait-for-health (init)
+Error from server (BadRequest): container "app" in pod "deployment7-599b5f769f-2lbt9" is waiting to start: PodInitializing
+```
+
+This is because Init containers are not shown by default when running kubectl
+logs, you have to manually specify the container with the -c flag. 
+
+`kubectl logs -n debugging deployment7-599b5f769f-2lbt9 -c wait-for-health`
+
+You can also use k9s, step into the pod, and find the specific container to
+look at the logs. This is also required if a pod has multiple containers in it.
+
+Looking at the init container logs, we see
+
+```
+Health check failed, retrying in 5s...
+Health check failed, retrying in 5s...
+Health check failed, retrying in 5s...
+```
+
+If we describe the deployment again, we can more closely inspect what the Init
+container is trying to do.
+
+```
+  Init Containers:
+   wait-for-health:
+    Image:      busybox
+    Port:       <none>
+    Host Port:  <none>
+    Command:
+      sh
+      -c
+      echo "Waiting for healthcheck-server..."
+      echo "Attempting wget against http://healthcheck-server:8080"
+      until wget -qO- http://healthcheck-server:8080 > /dev/null 2>&1; do
+        echo "Health check failed, retrying in 5s..."
+        sleep 5
+      done
+      echo "Health check passed. Starting main container."
+```
+
+It appears the Init Container is trying to connect to a service at
+"healthcheck-server" on port 8080, let's see if that service exists.
+
+`kubectl get service -n debugging`
+
+```
+NAME                 TYPE           CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
+deployment7          LoadBalancer   10.96.220.213   <pending>     80:32697/TCP   45h
+healthcheck-server   ClusterIP      10.96.177.219   <none>        8080/TCP       45h
+service5             ClusterIP      10.96.149.218   <none>        443/TCP        45h
+```
+
+We can see there is a service by that name in the debugging namespace.
+It appears to be listening port 8080. For now, let's assume that service
+is not misbehaving and would respond to a request by deployment7. What else
+could be causing our traffic to not be able to arrive at that service. Since
+we're on a single physical node running kind, and these services are running
+on the same k8s node, there's unlikely something physical or even at the OS
+level is preventing the traffic. It's not impossible, but less likely. Instead,
+a network policy could be prevent this traffic. Let's see if there are any
+network policies in the debugging namespace.
+
+`kubectl get networkpolicies -n debugging`
+
+```
+NAME                POD-SELECTOR             AGE
+block-deployment7   app=healthcheck-server   45h
+```
+
+Lets describe this netpol.
+
+```
+Spec:
+  PodSelector:     app=healthcheck-server
+  Allowing ingress traffic:
+    <none> (Selected pods are isolated for ingress connectivity)
+```
+
+It appears that this netpol is blocking all ingress traffic. If I simply delete
+this netpol, the service would likely start working. But let's see if we can
+be more granular with what traffic we allow through. Let's edit the deployment
+to allow traffic on 8080 only. 
+
+When editing the deployment7 file, we can see an explicitly empty ingress list,
+blocking all traffic. If we change the ingress block to:
+
+```
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: 8080
+```
+
+It will allow 8080 traffic through. Upon applying this change, eventually the
+healthcheck in the init container will pass, and the pod will deploy
+successfully.
+
 # LAB4
 
 ## Deployment 8
